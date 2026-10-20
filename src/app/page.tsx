@@ -2,32 +2,23 @@
 
 import React, { useState, useEffect } from "react";
 import Header from "@/components/Header";
-import OverviewView from "@/components/OverviewView";
 import FamilyTreeCanvas from "@/components/FamilyTreeCanvas";
 import MemberListView from "@/components/MemberListView";
-import BranchManagementView from "@/components/BranchManagementView";
-import AnniversariesView from "@/components/AnniversariesView";
-import FundsView from "@/components/FundsView";
-import DocumentsView from "@/components/DocumentsView";
 import AdminView from "@/components/AdminView";
 import MemberDetailDrawer from "@/components/MemberDetailDrawer";
 import MemberFormModal from "@/components/MemberFormModal";
 import LoginModal from "@/components/LoginModal";
 import CreateClanModal from "@/components/CreateClanModal";
+import InviteModal from "@/components/InviteModal";
 import KinshipCalculatorModal from "@/components/KinshipCalculatorModal";
 import LotusFooter from "@/components/LotusFooter";
 import {
   ShieldCheck,
   Eye,
-  Sliders,
-  Users,
-  Compass,
-  ArrowRightLeft,
-  Sparkles,
   CheckCircle2,
   X,
   FileCheck2,
-  Flower2,
+  Sparkles,
 } from "lucide-react";
 
 export interface CurrentUser {
@@ -53,7 +44,8 @@ const DEFAULT_ADMIN: CurrentUser = {
 
 export default function HomePage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser>(DEFAULT_GUEST);
-  const [activeTab, setActiveTab] = useState<string>("overview");
+  // Default to Family Tree Canvas as requested
+  const [activeTab, setActiveTab] = useState<string>("tree");
 
   // Clan and stats state
   const [clan, setClan] = useState<any>(null);
@@ -68,16 +60,21 @@ export default function HomePage() {
   });
   const [branches, setBranches] = useState<any[]>([]);
   const [allMembers, setAllMembers] = useState<any[]>([]);
+  const [pendingCount, setPendingCount] = useState<number>(0);
 
   // Modals state
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showCreateClanModal, setShowCreateClanModal] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
   const [showMemberFormModal, setShowMemberFormModal] = useState(false);
   const [editingMember, setEditingMember] = useState<any | null>(null);
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
   const [showKinshipModal, setShowKinshipModal] = useState(false);
   const [kinshipPreselectedA, setKinshipPreselectedA] = useState<string | undefined>();
   const [kinshipPreselectedB, setKinshipPreselectedB] = useState<string | undefined>();
+
+  // Toast notification state
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Guest Propose Change Modal
   const [showProposeModal, setShowProposeModal] = useState(false);
@@ -91,6 +88,13 @@ export default function HomePage() {
   const [proposeMsg, setProposeMsg] = useState<string | null>(null);
 
   const isAdmin = currentUser.role === "ADMIN";
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 5000);
+  };
 
   // Fetch initial clan data & branches
   const fetchClanData = async () => {
@@ -132,10 +136,49 @@ export default function HomePage() {
     }
   };
 
+  const fetchPendingCount = async () => {
+    try {
+      const [resM, resR] = await Promise.all([
+        fetch("/api/members?status=pending"),
+        fetch("/api/change-requests"),
+      ]);
+      const dataM = await resM.json();
+      const dataR = await resR.json();
+      const pM = (dataM.members || []).length;
+      const pR = (dataR.requests || []).filter((r: any) => r.status === "PENDING").length;
+      setPendingCount(pM + pR);
+    } catch (e) {
+      console.error("Error fetching pending count:", e);
+    }
+  };
+
+  // Handle invite links on mount: ?invite=<token>
   useEffect(() => {
     fetchClanData();
     fetchBranches();
     fetchMembersList();
+    fetchPendingCount();
+
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get("invite");
+      if (token) {
+        fetch(`/api/invites?token=${token}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.success && data.invite) {
+              setCurrentUser({
+                id: `invited-${token.slice(0, 8)}`,
+                email: "thanhvien@giaphaviet.vn",
+                name: "Thành viên dòng họ",
+                role: data.invite.role || "MEMBER",
+              });
+              showToast("Chào mừng bạn đã tham gia Gia phả dòng họ qua liên kết mời!");
+            }
+          })
+          .catch(console.error);
+      }
+    }
   }, []);
 
   // Quick switch role
@@ -145,7 +188,7 @@ export default function HomePage() {
     } else {
       setCurrentUser(DEFAULT_GUEST);
       if (activeTab === "admin") {
-        setActiveTab("overview");
+        setActiveTab("tree");
       }
     }
   };
@@ -153,7 +196,7 @@ export default function HomePage() {
   // Delete member
   const handleDeleteMember = async (id: string, name: string) => {
     if (!isAdmin) {
-      alert("Chỉ Quản trị viên mới có quyền xóa hồ sơ.");
+      showToast("Chỉ Quản trị viên mới có quyền xóa hồ sơ.");
       return;
     }
     if (!window.confirm(`Bạn có chắc chắn muốn xóa hồ sơ của "${name}" không?`)) {
@@ -166,11 +209,12 @@ export default function HomePage() {
       if (!res.ok) {
         throw new Error(data.error || "Không thể xóa hồ sơ.");
       }
-      alert(data.message || "Đã xóa thành công.");
+      showToast(data.message || "Đã xóa thành công.");
       setSelectedMember(null);
       fetchClanData();
       fetchBranches();
       fetchMembersList();
+      fetchPendingCount();
     } catch (err: any) {
       alert(err.message || "Lỗi khi xóa thành viên.");
     }
@@ -204,7 +248,8 @@ export default function HomePage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Không thể gửi đề xuất.");
 
-      setProposeMsg("Đề xuất đã được gửi tới Ban Quản Trị để xác minh thành công!");
+      fetchPendingCount();
+      showToast("Yêu cầu của bạn đã được gửi tới Quản trị viên và đang chờ duyệt.");
       setTimeout(() => {
         setShowProposeModal(false);
         setProposeMsg(null);
@@ -218,6 +263,21 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col font-sans">
+      {/* Floating Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#1E5F52] text-white px-5 py-3 rounded-2xl shadow-2xl border-2 border-[#E0A926] flex items-center space-x-3 animate-fade-in max-w-md w-11/12 sm:w-auto">
+          <CheckCircle2 className="w-5 h-5 text-[#FADB7F] shrink-0" />
+          <span className="font-semibold text-xs sm:text-sm font-serif">{toastMessage}</span>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            className="ml-2 text-white/70 hover:text-white p-0.5 rounded-full hover:bg-white/10"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Dynamic Role Switcher Notice Bar with Lotus Accent */}
       <div
         className={`px-4 py-2 border-b text-xs flex flex-wrap items-center justify-between gap-3 shadow-2xs transition-colors ${
@@ -234,12 +294,12 @@ export default function HomePage() {
               }`}
             ></span>
             <span className="font-semibold text-stone-900">
-              {isAdmin ? "Đang ở chế độ Quản Trị Viên (Admin):" : "Đang ở chế độ Khách Thăm Quan:"}
+              {isAdmin ? "Đang ở chế độ Quản Trị Viên (Admin):" : "Đang ở chế độ Khách / Thành Viên:"}
             </span>
             <span className="font-medium text-stone-600">
               {isAdmin
-                ? "Toàn quyền tạo chi nhánh (1-4 chi mẫu ban đầu), thêm/sửa/xóa thành viên và thẩm định gia phả."
-                : "Xem thông tin gia phả, sơ đồ trực quan, tra cứu xưng hô và gửi đề xuất cập nhật kèm minh chứng."}
+                ? "Toàn quyền thêm/sửa/xóa trực tiếp, tạo liên kết mời và phê duyệt thành viên mới."
+                : "Xem sơ đồ trực hệ, đóng góp thành viên mới (yêu cầu chờ Admin duyệt)."}
             </span>
           </div>
 
@@ -280,27 +340,19 @@ export default function HomePage() {
         onSwitchRole={handleSwitchRole}
         onOpenLogin={() => setShowLoginModal(true)}
         onOpenCreateClan={() => setShowCreateClanModal(true)}
-        onOpenCreateBranch={() => setActiveTab("branches")}
+        onOpenCreateBranch={() => setActiveTab("admin")}
         onOpenAddMember={() => {
           setEditingMember(null);
           setShowMemberFormModal(true);
         }}
-        clanName={clan?.name}
+        onOpenInvite={() => setShowInviteModal(true)}
+        pendingCount={pendingCount}
+        clanName={clan?.name || "Gia phả dòng họ"}
       />
 
-      {/* Main Content Area */}
+      {/* Main Content Area (Focused on Tree Diagram, Member List, and Admin Approval Dashboard) */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
-        {/* TAB 1: Trang chủ (Overview) */}
-        {activeTab === "overview" && (
-          <OverviewView
-            stats={stats}
-            clan={clan}
-            onNavigateTab={setActiveTab}
-            isAdmin={isAdmin}
-          />
-        )}
-
-        {/* TAB 2: Cây gia phả (Family Tree) */}
+        {/* TAB 1: Cây gia phả trực hệ (Family Tree) */}
         {activeTab === "tree" && (
           <div className="space-y-4">
             <FamilyTreeCanvas
@@ -323,12 +375,12 @@ export default function HomePage() {
               }}
               onOpenCreateClan={() => setShowCreateClanModal(true)}
               isAdmin={isAdmin}
-              clanName={clan?.name}
+              clanName={clan?.name || "Gia phả dòng họ"}
             />
           </div>
         )}
 
-        {/* TAB 3: Danh sách thành viên (Members) */}
+        {/* TAB 2: Danh sách thành viên (Members) */}
         {activeTab === "members" && (
           <MemberListView
             onSelectMember={(m) => setSelectedMember(m)}
@@ -350,93 +402,11 @@ export default function HomePage() {
           />
         )}
 
-        {/* TAB 4: Quản lý Chi họ & Nhánh (Branches) */}
-        {activeTab === "branches" && (
-          <BranchManagementView
-            isAdmin={isAdmin}
-            onSelectBranchForTree={(branchId) => setActiveTab("tree")}
-          />
-        )}
-
-        {/* TAB 5: Tra cứu xưng hô họ hàng (Kinship) */}
-        {activeTab === "kinship" && (
-          <div className="space-y-6">
-            <div className="bg-gradient-to-r from-[#8B1E1E] to-[#681313] text-white p-6 rounded-3xl shadow-xl border border-[#C59B27]/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div>
-                <div className="inline-flex items-center space-x-1.5 bg-amber-400/20 text-amber-200 text-xs px-3 py-1 rounded-full border border-amber-300/30 mb-2">
-                  <Compass className="w-3.5 h-3.5" />
-                  <span>Chuẩn Mực Xưng Hô Dòng Tộc Việt Nam</span>
-                </div>
-                <h1 className="text-2xl font-bold font-serif text-amber-100">
-                  Tra Cứu Xưng Hô & Bậc Huyết Thống
-                </h1>
-                <p className="text-xs text-amber-100/70 max-w-2xl mt-1">
-                  Thuật toán xác định tổ tiên chung gần nhất (LCA), chênh lệch thế hệ, phân biệt nhánh Nội / Ngoại và cung cấp danh xưng gọi nhau chuẩn xác nhất theo văn hóa Việt.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowKinshipModal(true)}
-                className="px-5 py-2.5 bg-[#C59B27] hover:bg-[#B0881F] text-[#24150B] font-bold text-xs rounded-xl shadow-md transition-all flex items-center space-x-2 shrink-0"
-              >
-                <ArrowRightLeft className="w-4 h-4" />
-                <span>Mở Công Cụ Tra Cứu Xưng Hô</span>
-              </button>
-            </div>
-
-            {/* Quick explanation guide cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              <div className="bg-white rounded-2xl border border-[#E8DEC7] p-5 shadow-sm space-y-3">
-                <h3 className="font-bold font-serif text-[#8B1E1E] text-sm">
-                  1. Quan hệ Trực hệ (Cha Mẹ - Con Cháu)
-                </h3>
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  Cách nhau 1 đời: Cha/Mẹ ⇄ Con cái.<br />
-                  Cách nhau 2 đời: Ông/Bà ⇄ Cháu nội/ngoại.<br />
-                  Cách nhau 3 đời: Cụ/Cố ⇄ Chắt.<br />
-                  Cách nhau 4 đời: Kỵ ⇄ Chút.
-                </p>
-              </div>
-
-              <div className="bg-white rounded-2xl border border-[#E8DEC7] p-5 shadow-sm space-y-3">
-                <h3 className="font-bold font-serif text-[#8B1E1E] text-sm">
-                  2. Quan hệ Bàng hệ (Anh Chị Em & Con Chú Bác)
-                </h3>
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  Cùng một tổ phụ: Con của anh cả là anh/chị họ.<br />
-                  Nguyên tắc truyền thống: <em>“Bé bằng hạt kê nhưng vai vế bề trên vẫn là Anh/Chú”</em>. Hệ thống tự động tính theo thế thứ chi họ.
-                </p>
-              </div>
-
-              <div className="bg-white rounded-2xl border border-[#E8DEC7] p-5 shadow-sm space-y-3">
-                <h3 className="font-bold font-serif text-[#8B1E1E] text-sm">
-                  3. Xưng hô Hôn phối & Dâu Rể
-                </h3>
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  Vợ của Chú gọi là Thím, vợ của Bác gọi là Bác dâu.<br />
-                  Chồng của Cô gọi là Chú rể/Dượng.<br />
-                  Chồng của Dì gọi là Dượng.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 6: Lịch giỗ & Sự kiện (Anniversaries) */}
-        {activeTab === "anniversaries" && <AnniversariesView isAdmin={isAdmin} />}
-
-        {/* TAB 7: Tư liệu cổ & Lịch sử (Documents) */}
-        {activeTab === "documents" && <DocumentsView isAdmin={isAdmin} />}
-
-        {/* TAB 8: Quỹ dòng họ & Khuyến học (Funds) */}
-        {activeTab === "funds" && <FundsView isAdmin={isAdmin} />}
-
-        {/* TAB 9: Quản trị & Duyệt (Admin only) */}
+        {/* TAB 3: Bảng kiểm duyệt & Quản trị (Admin only) */}
         {activeTab === "admin" && isAdmin && (
           <AdminView
             onNavigateTab={setActiveTab}
-            onOpenCreateBranch={() => setActiveTab("branches")}
+            onOpenCreateBranch={() => setActiveTab("admin")}
             onOpenAddMember={() => {
               setEditingMember(null);
               setShowMemberFormModal(true);
@@ -445,7 +415,7 @@ export default function HomePage() {
         )}
       </main>
 
-      {/* Footer: Lively Blooming Pink Lotus & Layered Green Lotus Leaves over Rippling Waves */}
+      {/* Footer: Lotus Flower and Gentle Waves */}
       <LotusFooter />
 
       {/* MODALS & DRAWERS */}
@@ -456,21 +426,36 @@ export default function HomePage() {
         onLoginSuccess={(user) => {
           setCurrentUser(user);
           setShowLoginModal(false);
+          fetchPendingCount();
+          showToast(`Đăng nhập thành công với vai trò ${user.role}!`);
         }}
       />
 
-      {/* 2. Create Clan Modal */}
-      <CreateClanModal
-        isOpen={showCreateClanModal}
-        onClose={() => setShowCreateClanModal(false)}
-        onSuccess={(newClan) => {
-          setClan(newClan);
-          fetchClanData();
-          setShowCreateClanModal(false);
-        }}
-      />
+      {/* 2. Create Clan Modal (Admin Only) */}
+      {isAdmin && (
+        <CreateClanModal
+          isOpen={showCreateClanModal}
+          onClose={() => setShowCreateClanModal(false)}
+          onSuccess={(newClan) => {
+            setClan(newClan);
+            fetchClanData();
+            setShowCreateClanModal(false);
+            showToast("Đã khởi tạo Gia phả dòng họ mới thành công!");
+          }}
+        />
+      )}
 
-      {/* 3. Member Detail Drawer */}
+      {/* 3. Invite Modal (Admin Only) */}
+      {isAdmin && (
+        <InviteModal
+          isOpen={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          clanName={clan?.name || "Gia phả dòng họ"}
+          adminEmail={currentUser.email}
+        />
+      )}
+
+      {/* 4. Member Detail Drawer */}
       <MemberDetailDrawer
         member={selectedMember}
         onClose={() => setSelectedMember(null)}
@@ -498,19 +483,27 @@ export default function HomePage() {
         }}
       />
 
-      {/* 4. Member Add/Edit Form Modal */}
+      {/* 5. Member Add/Edit Form Modal */}
       <MemberFormModal
         isOpen={showMemberFormModal}
         onClose={() => {
           setShowMemberFormModal(false);
           setEditingMember(null);
         }}
-        onSuccess={() => {
+        onSuccess={(msg) => {
           setShowMemberFormModal(false);
           setEditingMember(null);
           fetchClanData();
           fetchBranches();
           fetchMembersList();
+          fetchPendingCount();
+          if (msg) {
+            showToast(msg);
+          } else if (!isAdmin) {
+            showToast("Yêu cầu của bạn đã được gửi tới Quản trị viên và đang chờ duyệt.");
+          } else {
+            showToast("Đã lưu hồ sơ thành viên thành công!");
+          }
         }}
         editingMember={editingMember}
         branches={branches}
@@ -518,7 +511,7 @@ export default function HomePage() {
         isAdmin={isAdmin}
       />
 
-      {/* 5. Kinship Calculator Modal */}
+      {/* 6. Kinship Calculator Modal */}
       <KinshipCalculatorModal
         isOpen={showKinshipModal}
         onClose={() => {
@@ -530,7 +523,7 @@ export default function HomePage() {
         preselectedBId={kinshipPreselectedB}
       />
 
-      {/* 6. Guest Propose Change Modal */}
+      {/* 7. Guest Propose Change Modal */}
       {showProposeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-[#C59B27]/40 overflow-hidden">
@@ -611,7 +604,7 @@ export default function HomePage() {
                 <textarea
                   rows={2}
                   required
-                  placeholder="Theo bản gia phả chép tay năm 1972 của Cụ Phan Văn Định..."
+                  placeholder="Theo bản gia phả chép tay của dòng họ..."
                   value={proposeEvidence}
                   onChange={(e) => setProposeEvidence(e.target.value)}
                   className="w-full px-3 py-2 border border-stone-300 rounded-lg text-xs focus:ring-1 focus:ring-[#8B1E1E] focus:outline-hidden"

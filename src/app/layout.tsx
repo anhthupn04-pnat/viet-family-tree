@@ -2,10 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Gia Phả Việt — VietFamilyTree | Quản Lý Gia Phả & Dòng Họ Trực Tuyến",
-  description:
-    "Hệ thống quản lý gia phả dòng họ toàn diện: Cây gia phả tương tác, tra cứu quan hệ xưng hô họ hàng, lịch âm & ngày giỗ, quỹ khuyến học và thư viện số hóa văn bia.",
-  keywords: ["gia phả việt", "vietfamilytree", "quản lý dòng họ", "cây gia phả", "xưng hô họ hàng", "lịch âm ngày giỗ"],
+  title: "Gia phả dòng họ",
+  description: "Hệ thống quản lý gia phả dòng họ trực tuyến - Sơ đồ cây phả hệ trực hệ và phân quyền quản trị",
+  keywords: ["gia phả dòng họ", "cây gia phả", "phả hệ", "dòng họ"],
 };
 
 export default function RootLayout({

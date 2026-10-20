@@ -6,7 +6,7 @@ import { X, UserPlus, Save, Users, Calendar, MapPin, Sparkles } from "lucide-rea
 interface MemberFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (msg?: string) => void;
   editingMember?: any | null;
   branches: any[];
   allMembers: any[];
@@ -142,9 +142,11 @@ export default function MemberFormModal({
         throw new Error(data.error || "Không thể lưu hồ sơ thành viên.");
       }
 
-      alert(data.message || (isAdmin ? "Đã lưu thành công!" : "Đề xuất đã được gửi tới Ban Quản Trị!"));
+      const successMsg = isAdmin
+        ? "Đã lưu hồ sơ thành viên thành công!"
+        : "Yêu cầu của bạn đã được gửi tới Quản trị viên và đang chờ duyệt.";
 
-      onSuccess();
+      onSuccess(successMsg);
       onClose();
     } catch (err: any) {
       setError(err.message || "Đã xảy ra lỗi.");

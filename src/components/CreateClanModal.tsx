@@ -14,7 +14,7 @@ export default function CreateClanModal({
   onClose,
   onSuccess,
 }: CreateClanModalProps) {
-  const [name, setName] = useState("");
+  const [name, setName] = useState("Gia phả dòng họ");
   const [couplet1, setCouplet1] = useState("");
   const [couplet2, setCouplet2] = useState("");
   const [originLocation, setOriginLocation] = useState("");
@@ -89,7 +89,7 @@ export default function CreateClanModal({
           <div>
             <h2 className="text-xl font-bold font-serif text-[#8B1E1E] flex items-center space-x-2">
               <Building className="w-5 h-5 text-[#C59B27]" />
-              <span>Khởi tạo Thông tin gia phả</span>
+              <span>Tạo Gia Phả Mới</span>
             </h2>
             <p className="text-xs text-stone-500 mt-0.5">
               Điền thông tin để tạo gia phả mới cho dòng họ của bạn.

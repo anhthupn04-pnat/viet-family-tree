@@ -4,18 +4,14 @@ import React from "react";
 import {
   Users,
   GitBranch,
-  Search,
-  Calendar,
-  BookOpen,
-  DollarSign,
   ShieldCheck,
-  Home,
   PlusCircle,
   LogIn,
   UserCheck,
   Eye,
-  Sliders,
   Sparkles,
+  UserPlus,
+  Bell,
 } from "lucide-react";
 
 interface HeaderProps {
@@ -29,8 +25,10 @@ interface HeaderProps {
   onSwitchRole: (role: "ADMIN" | "GUEST") => void;
   onOpenLogin: () => void;
   onOpenCreateClan: () => void;
-  onOpenCreateBranch: () => void;
+  onOpenCreateBranch?: () => void;
   onOpenAddMember: () => void;
+  onOpenInvite?: () => void;
+  pendingCount?: number;
   clanName?: string;
 }
 
@@ -54,7 +52,6 @@ const GoldenDragon = ({ flip = false }: { flip?: boolean }) => (
       d="M85 18 C 88 12, 95 10, 98 14 C 100 18, 96 24, 92 24 C 88 24, 84 20, 85 18 Z"
       fill="#FADB7F"
     />
-    {/* Râu rồng uốn lượn & bờm lửa */}
     <path
       d="M92 16 C 98 8, 88 4, 82 8 C 78 11, 80 15, 84 14 Z"
       fill="#E0A926"
@@ -82,23 +79,24 @@ export default function Header({
   onOpenCreateClan,
   onOpenCreateBranch,
   onOpenAddMember,
-  clanName = "Gia Phả Phan Tộc Đại Tông",
+  onOpenInvite,
+  pendingCount = 0,
+  clanName = "Gia phả dòng họ",
 }: HeaderProps) {
   const isAdmin = currentUser.role === "ADMIN";
 
+  // Focused Navigation: Tree view, Members list, and Admin approval dashboard
   const navItems = [
-    { id: "overview", label: "Trang Chủ", icon: Home },
     { id: "tree", label: "Cây Gia Phả", icon: GitBranch },
-    { id: "members", label: "Thành Viên", icon: Users },
-    { id: "branches", label: "Chi Họ & Nhánh", icon: Sliders },
-    { id: "kinship", label: "Tra Cứu Xưng Hô", icon: Search },
-    { id: "anniversaries", label: "Lịch Giỗ & Sự Kiện", icon: Calendar },
-    { id: "documents", label: "Tư Liệu Cổ", icon: BookOpen },
-    { id: "funds", label: "Quỹ Dòng Họ", icon: DollarSign },
+    { id: "members", label: "Danh Sách Thành Viên", icon: Users },
   ];
 
   if (isAdmin) {
-    navItems.push({ id: "admin", label: "Quản Trị & Duyệt", icon: ShieldCheck });
+    navItems.push({
+      id: "admin",
+      label: "Bảng Kiểm Duyệt",
+      icon: ShieldCheck,
+    });
   }
 
   return (
@@ -112,14 +110,13 @@ export default function Header({
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 relative z-10">
           {/* Main Title Scroll flanked by Dual Dragons */}
           <div className="flex items-center space-x-2 sm:space-x-3">
-            {/* Dragon Left */}
             <GoldenDragon flip={false} />
 
             {/* Scroll text container */}
             <div className="bg-black/25 px-3 py-1 rounded-xl border border-[#E0A926]/40 backdrop-blur-xs flex items-center space-x-2">
               <span className="w-2 h-2 rounded-full bg-[#E0A926] animate-pulse"></span>
               <span className="font-bold tracking-wide text-[#FADB7F] font-serif text-xs sm:text-sm">
-                {clanName}
+                Gia phả dòng họ
               </span>
               <span className="hidden md:inline text-amber-200/50">|</span>
               <span className="hidden md:inline italic text-amber-100/90 text-xs font-serif">
@@ -127,13 +124,29 @@ export default function Header({
               </span>
             </div>
 
-            {/* Dragon Right */}
             <GoldenDragon flip={true} />
           </div>
 
-          {/* Quick Role Switcher & Identity */}
-          <div className="flex items-center space-x-3">
-            {/* Switch pill */}
+          {/* Quick Role Switcher, Pending Bell & Identity */}
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            {/* Notification Bell with Badge for Admin */}
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setActiveTab("admin")}
+                className="relative p-1.5 rounded-full bg-[#5A0D0D] border border-[#E0A926]/40 text-[#FADB7F] hover:bg-[#6e1212] transition-colors"
+                title={`Bảng kiểm duyệt: ${pendingCount} yêu cầu đang chờ`}
+              >
+                <Bell className="w-4 h-4" />
+                {pendingCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-[#E0A926] text-[#24150B] font-extrabold text-[10px] w-4 h-4 rounded-full flex items-center justify-center shadow-xs animate-bounce">
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* Switch role toggle */}
             <div className="flex items-center bg-[#5A0D0D] rounded-full p-0.5 border border-[#E0A926]/50 shadow-inner">
               <button
                 type="button"
@@ -143,11 +156,12 @@ export default function Header({
                     ? "bg-[#E0A926] text-[#24150B] font-bold shadow-md"
                     : "text-amber-200 hover:text-white"
                 }`}
-                title="Xem chế độ Khách Thăm Quan"
+                title="Chế độ Thành viên / Khách"
               >
                 <Eye className="w-3 h-3" />
-                <span>Khách</span>
+                <span>Khách/Thành viên</span>
               </button>
+
               <button
                 type="button"
                 onClick={() => onSwitchRole("ADMIN")}
@@ -156,7 +170,7 @@ export default function Header({
                     ? "bg-[#E0A926] text-[#24150B] font-bold shadow-md"
                     : "text-amber-200 hover:text-white"
                 }`}
-                title="Kích hoạt chế độ Tổng Quản Trị"
+                title="Chế độ Tổng Quản Trị"
               >
                 <ShieldCheck className="w-3 h-3 text-[#C62828]" />
                 <span>Admin</span>
@@ -190,7 +204,7 @@ export default function Header({
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
         {/* Brand with Lotus Pink & Jade Green accents */}
         <div
-          onClick={() => setActiveTab("overview")}
+          onClick={() => setActiveTab("tree")}
           className="flex items-center space-x-3 cursor-pointer group"
         >
           {/* Logo icon with Jade Green (#1E5F52) & Gold border */}
@@ -200,56 +214,60 @@ export default function Header({
           <div>
             <div className="flex items-center space-x-2">
               <span className="text-xl font-bold font-serif text-[#1E5F52] tracking-tight">
-                Gia Phả Việt
+                Gia phả dòng họ
               </span>
               <span className="text-[10px] bg-[#FCE4EC] text-[#C62828] border border-[#F06292]/40 font-bold px-1.5 py-0.2 rounded-full flex items-center space-x-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#F06292]"></span>
-                <span>Việt Nam</span>
+                <span>Chính Tông</span>
               </span>
             </div>
             <p className="text-[11px] text-stone-500 -mt-0.5">
-              VietFamilyTree — Di Sản & Huyết Thống Trường Tồn
+              VietFamilyTree — Quản Lý Phả Hệ & Trực Hệ Dòng Họ
             </p>
           </div>
         </div>
 
-        {/* Action Buttons for Admin & Quick Actions */}
+        {/* Action Buttons with RBAC */}
         <div className="flex items-center space-x-2">
-          {isAdmin && (
-            <>
-              <button
-                type="button"
-                onClick={onOpenCreateBranch}
-                className="hidden sm:inline-flex items-center space-x-1.5 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#1E5F52] border border-[#2B7A6A]/40 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-xs transition-all"
-              >
-                <PlusCircle className="w-3.5 h-3.5 text-[#2B7A6A]" />
-                <span>Tạo nhánh mới</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={onOpenAddMember}
-                className="inline-flex items-center space-x-1.5 bg-[#1E5F52] hover:bg-[#16483E] text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-md transition-all border border-[#E0A926]/40"
-              >
-                <PlusCircle className="w-3.5 h-3.5 text-[#FADB7F]" />
-                <span>Thêm thành viên</span>
-              </button>
-            </>
+          {/* Admin Exclusive: Invite Link Button */}
+          {isAdmin && onOpenInvite && (
+            <button
+              type="button"
+              onClick={onOpenInvite}
+              className="inline-flex items-center space-x-1.5 bg-[#FAF7EE] hover:bg-[#F5EEDC] text-[#1E5F52] border border-[#E0A926] px-3 py-1.5 rounded-xl text-xs font-semibold shadow-xs transition-all"
+              title="Tạo liên kết bảo mật mời thành viên"
+            >
+              <UserPlus className="w-3.5 h-3.5 text-[#E0A926]" />
+              <span className="hidden sm:inline">Mời thành viên</span>
+            </button>
           )}
 
+          {/* Add Member Button: Available to all, but status is handled by role */}
           <button
             type="button"
-            onClick={onOpenCreateClan}
-            className="inline-flex items-center space-x-1.5 bg-[#C62828] hover:bg-[#A91B1B] text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow-md transition-all border border-[#E0A926]/40"
-            title="Khởi tạo thông tin gia phả mới"
+            onClick={onOpenAddMember}
+            className="inline-flex items-center space-x-1.5 bg-[#1E5F52] hover:bg-[#16483E] text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-md transition-all border border-[#E0A926]/40"
           >
-            <Sparkles className="w-3.5 h-3.5 text-[#FADB7F]" />
-            <span className="hidden sm:inline">Khởi tạo gia phả</span>
+            <PlusCircle className="w-3.5 h-3.5 text-[#FADB7F]" />
+            <span>{isAdmin ? "Thêm thành viên" : "Đóng góp thành viên"}</span>
           </button>
+
+          {/* Admin Exclusive: "Tạo Gia Phả Mới" - ONLY Admin can see & use this */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={onOpenCreateClan}
+              className="inline-flex items-center space-x-1.5 bg-[#C62828] hover:bg-[#A91B1B] text-white font-bold px-3.5 py-1.5 rounded-xl text-xs shadow-md transition-all border border-[#E0A926]/50"
+              title="Khởi tạo một gia phả dòng họ mới"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[#FADB7F]" />
+              <span>Tạo Gia Phả Mới</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 3. NAVIGATION TABS */}
+      {/* 3. NAVIGATION TABS (Focused Minimalist Scope) */}
       <div className="border-t border-[#E8DEC7] bg-[#FDFBF7] px-4 overflow-x-auto no-scrollbar">
         <div className="max-w-7xl mx-auto flex items-center space-x-1">
           {navItems.map((item) => {
@@ -260,7 +278,7 @@ export default function Header({
                 key={item.id}
                 type="button"
                 onClick={() => setActiveTab(item.id)}
-                className={`flex items-center space-x-1.5 py-2.5 px-3.5 text-xs sm:text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
+                className={`flex items-center space-x-1.5 py-2.5 px-4 text-xs sm:text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
                   isActive
                     ? "border-[#1E5F52] text-[#1E5F52] font-bold bg-[#E6F4F1] rounded-t-lg shadow-2xs"
                     : "border-transparent text-stone-600 hover:text-[#1E5F52] hover:bg-stone-50"
@@ -272,8 +290,13 @@ export default function Header({
                   }`}
                 />
                 <span>{item.label}</span>
+                {item.id === "admin" && pendingCount > 0 && (
+                  <span className="bg-[#C62828] text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full ml-1">
+                    {pendingCount}
+                  </span>
+                )}
                 {item.id === "tree" && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#F06292]"></span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#1E5F52]"></span>
                 )}
               </button>
             );

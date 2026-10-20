@@ -28,6 +28,8 @@ model Clan {
   slug               String               @unique
   ancestralHall      String?              // Từ đường / Nhà thờ họ
   historySummary     String?
+  creatorId          String?              // ID của người tạo gia phả (Admin)
+  inviteCode         String?              @default("GPDH-2026")
   isPublic           Boolean              @default(true)
   allowMemberInvite  Boolean              @default(true)
   createdAt          DateTime             @default(now())
@@ -41,6 +43,7 @@ model Clan {
   funds              ClanFund[]
   changeRequests     ChangeRequest[]
   auditLogs          AuditLog[]
+  invites            Invite[]
 }
 
 model ClanBranch {
@@ -84,6 +87,8 @@ model MemberProfile {
   status           String         @default("approved") // 'pending' | 'approved' | 'rejected'
   submitterName    String?        // Người đề xuất đóng góp
   submitterNote    String?        // Ghi chú của người gửi
+  createdBy        String?        // ID hoặc email người tạo
+  approvedBy       String?        // ID hoặc email người duyệt
   
   fatherId         String?
   father           MemberProfile? @relation("FatherToChildren", fields: [fatherId], references: [id], onDelete: SetNull)
@@ -128,6 +133,7 @@ model AncestorAnniversary {
   location           String?        // Địa điểm tổ chức
   description        String?
   reminderDaysBefore Int            @default(7)
+  status             String         @default("approved") // 'pending' | 'approved' | 'rejected'
   createdAt          DateTime       @default(now())
 }
 
@@ -203,3 +209,17 @@ model AuditLog {
   details   String?
   createdAt DateTime @default(now())
 }
+
+model Invite {
+  id        String    @id @default(uuid())
+  clanId    String
+  clan      Clan      @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  role      String    @default("MEMBER") // ADMIN, MEMBER, GUEST
+  email     String?
+  expiresAt DateTime?
+  usedAt    DateTime?
+  createdBy String?
+  createdAt DateTime  @default(now())
+}
+
