@@ -1,15 +1,24 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const NO_CACHE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  "CDN-Cache-Control": "no-store",
+  "Vercel-CDN-Cache-Control": "no-store",
+};
+
 export async function GET() {
   try {
     const requests = await prisma.changeRequest.findMany({
       orderBy: { createdAt: "desc" },
     });
-    return NextResponse.json({ requests });
+    return NextResponse.json({ requests }, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("Change requests GET error:", error);
-    return NextResponse.json({ error: "Lỗi khi tải danh sách đề xuất." }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi khi tải danh sách đề xuất." }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }
 

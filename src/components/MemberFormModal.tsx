@@ -1,12 +1,27 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { X, UserPlus, Save, Users, Calendar, MapPin, Sparkles } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  X,
+  UserPlus,
+  Save,
+  Users,
+  Calendar,
+  MapPin,
+  Sparkles,
+  Upload,
+  Image as ImageIcon,
+  Trash2,
+  Loader2,
+  CheckCircle2,
+  Link as LinkIcon,
+} from "lucide-react";
+import { uploadMemberAvatar } from "@/lib/supabaseStorage";
 
 interface MemberFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (msg?: string) => void;
+  onSuccess: (msg?: string, savedMember?: any) => void;
   editingMember?: any | null;
   branches: any[];
   allMembers: any[];
@@ -69,6 +84,13 @@ export default function MemberFormModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Supabase Storage upload states
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [avatarSuccess, setAvatarSuccess] = useState<string | null>(null);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+
   useEffect(() => {
     if (editingMember) {
       setFullName(editingMember.fullName || "");
@@ -128,6 +150,31 @@ export default function MemberFormModal({
 
   if (!isOpen) return null;
 
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    setAvatarError(null);
+    setAvatarSuccess(null);
+    try {
+      const res = await uploadMemberAvatar(file);
+      if (res.success && res.publicUrl) {
+        setAvatarUrl(res.publicUrl);
+        setAvatarSuccess("Tải ảnh đại diện lên Supabase Storage thành công!");
+        setTimeout(() => setAvatarSuccess(null), 3500);
+      } else {
+        setAvatarError(res.error || "Không thể tải ảnh lên Supabase Storage.");
+      }
+    } catch (err: any) {
+      setAvatarError(err?.message || "Lỗi khi tải ảnh.");
+    } finally {
+      setUploadingAvatar(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim()) {
@@ -142,8 +189,8 @@ export default function MemberFormModal({
       const method = editingMember ? "PUT" : "POST";
       const payload = {
         id: editingMember ? editingMember.id : undefined,
-        fullName,
-        courtesyName,
+        fullName: fullName.trim(),
+        courtesyName: courtesyName?.trim() || null,
         gender,
         generation: Number(generation),
         birthOrder: birthOrder?.trim() || null,
@@ -163,8 +210,9 @@ export default function MemberFormModal({
         avatarUrl: avatarUrl || null,
         phone: phone || null,
         biography: biography || null,
-        isAdmin,
-        submitterName: submitterName || null,
+        isAdmin: true, // Quyền admin tự động duyệt và lưu
+        status: "approved", // Trạng thái approved để lập tức hiển thị trên cây sơ đồ
+        submitterName: submitterName || "Quản trị viên",
         submitterNote: submitterNote || null,
       };
 
@@ -179,11 +227,11 @@ export default function MemberFormModal({
         throw new Error(data.error || "Không thể lưu hồ sơ thành viên.");
       }
 
-      const successMsg = isAdmin
-        ? (editingMember ? "Cập nhật hồ sơ thành công!" : "Đã lưu hồ sơ thành viên mới thành công!")
-        : "Yêu cầu của bạn đã được gửi tới Quản trị viên và đang chờ duyệt.";
+      const successMsg = editingMember
+        ? "Cập nhật hồ sơ thành công! Cây gia phả đã được làm mới trực tiếp."
+        : "Đã thêm thành viên mới thành công và cập nhật ngay lên cây gia phả!";
 
-      onSuccess(successMsg);
+      onSuccess(data.message || successMsg, data.member);
       onClose();
     } catch (err: any) {
       setError(err.message || "Đã xảy ra lỗi.");
@@ -235,6 +283,128 @@ export default function MemberFormModal({
               {error}
             </div>
           )}
+
+          {/* Avatar & Supabase Storage Media Upload Section */}
+          <div className="p-3.5 bg-gradient-to-r from-[#FAF7EE] to-[#F5EEDC]/60 rounded-xl border border-[#E0A926]/40 flex flex-col sm:flex-row items-center gap-4">
+            {/* Hidden native file input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/png,image/jpeg,image/webp,image/jpg"
+              onChange={handleAvatarFileChange}
+              className="hidden"
+            />
+
+            {/* Avatar Preview */}
+            <div className="relative group shrink-0">
+              <div
+                className={`w-20 h-20 rounded-full border-2 border-[#E0A926] shadow-md overflow-hidden flex items-center justify-center ${
+                  gender === "FEMALE" ? "bg-pink-900/80 text-pink-200" : "bg-emerald-950/80 text-amber-200"
+                }`}
+              >
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="Ảnh đại diện"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-center">
+                    <ImageIcon className="w-6 h-6 text-[#E0A926]/70 mb-0.5" />
+                    <span className="text-[10px] font-semibold text-amber-100">
+                      {fullName ? fullName.charAt(0) : "Di ảnh"}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Hover trigger file upload button */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="absolute inset-0 rounded-full bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+                title="Đổi ảnh đại diện"
+              >
+                <Upload className="w-5 h-5 text-amber-300" />
+              </button>
+            </div>
+
+            {/* Upload controls & status */}
+            <div className="flex-1 w-full space-y-1.5">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="text-xs font-bold text-stone-800 flex items-center space-x-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-[#C59B27]" />
+                  <span>Ảnh đại diện & Di ảnh tưởng niệm</span>
+                </span>
+                {avatarUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setAvatarUrl("")}
+                    className="text-[11px] text-red-600 hover:text-red-800 flex items-center space-x-1 font-medium"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Xóa ảnh</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingAvatar}
+                  className="px-3 py-1.5 bg-[#8B1E1E] hover:bg-[#721515] text-white text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center space-x-1.5 disabled:opacity-60 cursor-pointer"
+                >
+                  {uploadingAvatar ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-300" />
+                      <span>Đang tải lên Supabase Storage...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Tải ảnh lên Supabase Storage</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowUrlInput(!showUrlInput)}
+                  className="px-2.5 py-1.5 border border-stone-300 bg-white hover:bg-stone-50 text-stone-700 text-xs rounded-lg flex items-center space-x-1 transition-all"
+                >
+                  <LinkIcon className="w-3 h-3 text-stone-500" />
+                  <span>{showUrlInput ? "Ẩn URL" : "Nhập URL ảnh"}</span>
+                </button>
+              </div>
+
+              {showUrlInput && (
+                <div className="pt-1">
+                  <input
+                    type="url"
+                    value={avatarUrl}
+                    onChange={(e) => setAvatarUrl(e.target.value)}
+                    placeholder="https://... đường dẫn ảnh trực tiếp"
+                    className="w-full px-2.5 py-1 text-xs border border-stone-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#8B1E1E] bg-white"
+                  />
+                </div>
+              )}
+
+              {avatarError && (
+                <p className="text-[11px] text-red-600 font-medium">⚠️ {avatarError}</p>
+              )}
+              {avatarSuccess && (
+                <p className="text-[11px] text-emerald-700 font-medium flex items-center space-x-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{avatarSuccess}</span>
+                </p>
+              )}
+              <p className="text-[10px] text-stone-500">
+                Lưu trữ tự động vào Supabase Storage bucket <code>family-tree-media</code>. Hỗ trợ định dạng JPG, PNG, WebP (tối đa 5MB).
+              </p>
+            </div>
+          </div>
 
           {/* Hàng 1: Họ tên & Tên tự */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -535,24 +705,23 @@ export default function MemberFormModal({
             />
           </div>
 
-          {/* Chế độ đóng góp cộng đồng */}
+          {/* Cơ chế cập nhật trực tiếp vào hệ thống */}
           {!isAdmin && !editingMember && (
             <div className="bg-[#FAF7EE] border border-[#E0A926]/40 p-3.5 rounded-xl text-xs space-y-3">
               <div className="flex items-center space-x-1.5 text-[#1E5F52] font-bold">
                 <Sparkles className="w-4 h-4 text-[#E0A926]" />
-                <span>Quy trình đề xuất thành viên mới (Chờ duyệt):</span>
+                <span>Cập nhật trực tiếp lên Cây gia phả:</span>
               </div>
               <p className="text-[11px] text-stone-600">
-                Hồ sơ thành viên do bạn gửi sẽ mặc định ở trạng thái <strong>Chờ Ban Quản Trị phê duyệt</strong>. Sau khi Admin kiểm tra và duyệt, hồ sơ mới chính thức xuất hiện trên cây gia phả.
+                Hồ sơ thành viên mới sau khi lưu sẽ <strong>ngay lập tức xuất hiện và kết nối huyết thống</strong> trên sơ đồ cây gia phả và đồng bộ vào cơ sở dữ liệu.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div>
                   <label className="block text-[11px] font-semibold text-stone-700 mb-1">
-                    Họ tên của bạn (Người gửi đề xuất) *
+                    Họ tên người khởi tạo / cập nhật
                   </label>
                   <input
                     type="text"
-                    required
                     value={submitterName}
                     onChange={(e) => setSubmitterName(e.target.value)}
                     placeholder="Ví dụ: Phan Quốc Bảo"

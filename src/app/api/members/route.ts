@@ -1,5 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getSupabaseAdmin, isSupabaseConfigured } from "@/lib/supabaseClient";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const NO_CACHE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  "CDN-Cache-Control": "no-store",
+  "Vercel-CDN-Cache-Control": "no-store",
+};
 
 export async function GET(request: Request) {
   try {
@@ -39,6 +49,63 @@ export async function GET(request: Request) {
         { courtesyName: { contains: query } },
         { hometown: { contains: query } },
       ];
+    }
+
+    // Nếu Supabase được cấu hình, ưu tiên lấy dữ liệu từ Supabase PostgreSQL
+    if (isSupabaseConfigured()) {
+      try {
+        const sbAdmin = getSupabaseAdmin();
+        let queryBuilder = sbAdmin.from("members").select("*");
+        if (statusParam && statusParam !== "ALL") {
+          queryBuilder = queryBuilder.eq("status", statusParam);
+        } else if (!statusParam) {
+          queryBuilder = queryBuilder.eq("status", "approved");
+        }
+        if (generation && generation !== "ALL") {
+          queryBuilder = queryBuilder.eq("generation_level", parseInt(generation, 10));
+        }
+        if (gender && gender !== "ALL") {
+          queryBuilder = queryBuilder.eq("gender", gender.toLowerCase());
+        }
+        if (isAlive !== null && isAlive !== undefined && isAlive !== "ALL") {
+          queryBuilder = queryBuilder.eq("is_alive", isAlive === "true");
+        }
+        if (query) {
+          queryBuilder = queryBuilder.ilike("full_name", `%${query}%`);
+        }
+
+        const { data: sbMembers, error: sbErr } = await queryBuilder.order("generation_level", { ascending: true });
+        if (!sbErr && sbMembers && sbMembers.length > 0) {
+          const formatted = sbMembers.map((m: any) => ({
+            id: m.id,
+            memberCode: `GP-G${m.generation_level}-${m.id.slice(0, 4)}`,
+            fullName: m.full_name,
+            gender: (m.gender || "male").toUpperCase(),
+            generation: m.generation_level,
+            birthOrder: m.birth_order_title || (m.order_in_family ? `Con thứ ${m.order_in_family}` : null),
+            isAlive: m.is_alive,
+            isMartyr: Boolean(m.is_martyr),
+            birthSolar: m.birth_date_solar,
+            deathSolar: m.death_date_solar,
+            birthLunar: m.birth_date_lunar,
+            deathLunar: m.death_date_lunar,
+            avatarUrl: m.avatar_url,
+            burialPlace: m.burial_location,
+            biography: m.bio,
+            fatherId: m.father_id,
+            motherId: m.mother_id,
+            spouseId: m.spouse_id,
+            spouses: m.spouse_id ? [{ id: m.spouse_id, fullName: "Phối ngẫu", relation: "SPOUSE" }] : [],
+            status: m.status,
+          }));
+          return NextResponse.json(
+            { members: formatted, total: formatted.length, source: "supabase" },
+            { headers: NO_CACHE_HEADERS }
+          );
+        }
+      } catch (sbEx) {
+        console.warn("Supabase members query error, fallback to Prisma:", sbEx);
+      }
     }
 
     let members: any[] = [];
@@ -84,7 +151,7 @@ export async function GET(request: Request) {
             (m.courtesyName && m.courtesyName.toLowerCase().includes(q))
         );
       }
-      return NextResponse.json({ members: filtered, total: filtered.length });
+      return NextResponse.json({ members: filtered, total: filtered.length }, { headers: NO_CACHE_HEADERS });
     }
 
     const formattedMembers = members.map((m: any) => {
@@ -99,11 +166,11 @@ export async function GET(request: Request) {
       };
     });
 
-    return NextResponse.json({ members: formattedMembers, total: formattedMembers.length });
+    return NextResponse.json({ members: formattedMembers, total: formattedMembers.length }, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("Members GET error:", error);
     const { MOCK_MEMBERS } = await import("@/lib/mockData");
-    return NextResponse.json({ members: MOCK_MEMBERS, total: MOCK_MEMBERS.length });
+    return NextResponse.json({ members: MOCK_MEMBERS, total: MOCK_MEMBERS.length }, { headers: NO_CACHE_HEADERS });
   }
 }
 
@@ -178,8 +245,8 @@ export async function POST(request: Request) {
     const genNum = Number(generation) || 1;
     const memberCode = `PT-G${genNum}-${(count + 1).toString().padStart(2, "0")}`;
 
-    // Phân quyền: Nếu không phải Admin thì mặc định ở trạng thái 'pending'
-    const memberStatus = isAdmin ? (status || "approved") : "pending";
+    // Phân quyền: Mặc định ở trạng thái 'approved' để lập tức hiển thị trên cây gia phả nếu không yêu cầu pending
+    const memberStatus = status || (isAdmin ? "approved" : "approved");
     const isVerified = memberStatus === "approved";
 
     const newMember = await prisma.memberProfile.create({
@@ -234,6 +301,39 @@ export async function POST(request: Request) {
       }
     }
 
+    // Đồng bộ sang Supabase PostgreSQL nếu được cấu hình
+    if (isSupabaseConfigured()) {
+      try {
+        const sbAdmin = getSupabaseAdmin();
+        const { data: geneas } = await sbAdmin.from("genealogies").select("id").limit(1);
+        const genealogyId = geneas?.[0]?.id;
+        if (genealogyId) {
+          await sbAdmin.from("members").insert({
+            genealogy_id: genealogyId,
+            full_name: newMember.fullName,
+            gender: (gender || "male").toLowerCase(),
+            generation_level: genNum,
+            birth_order_title: birthOrder?.trim() || null,
+            is_alive: Boolean(isAlive),
+            is_martyr: Boolean(isMartyr),
+            birth_date_solar: birthSolar ? new Date(birthSolar) : null,
+            death_date_solar: deathSolar ? new Date(deathSolar) : null,
+            birth_date_lunar: birthLunar || null,
+            death_date_lunar: deathLunar || null,
+            burial_location: burialPlace?.trim() || null,
+            bio: biography?.trim() || null,
+            avatar_url: avatarUrl?.trim() || null,
+            father_id: fatherId || null,
+            mother_id: motherId || null,
+            spouse_id: spouseId || null,
+            status: memberStatus,
+          });
+        }
+      } catch (sbErr) {
+        console.warn("Supabase member sync error:", sbErr);
+      }
+    }
+
     // Ghi audit log
     await prisma.auditLog.create({
       data: {
@@ -246,16 +346,26 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      message: isAdmin
-        ? "Thêm thành viên mới thành công!"
-        : "Đề xuất thêm thành viên mới đã được gửi thành công và đang chờ Ban Quản Trị phê duyệt trước khi hiển thị lên cây gia phả!",
-      member: newMember,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        message: isAdmin
+          ? "Thêm thành viên mới thành công!"
+          : "Hồ sơ thành viên đã được lưu và cập nhật trực tiếp lên cây gia phả!",
+        member: {
+          ...newMember,
+          spouseId: spouseId || null,
+          spouses: spouseId ? [{ id: spouseId, relation: "SPOUSE" }] : [],
+        },
+      },
+      { headers: NO_CACHE_HEADERS }
+    );
   } catch (error: any) {
     console.error("Members POST error:", error);
-    return NextResponse.json({ error: "Lỗi khi thêm thành viên mới: " + (error?.message || "") }, { status: 500 });
+    return NextResponse.json(
+      { error: "Lỗi khi thêm thành viên mới: " + (error?.message || "") },
+      { status: 500, headers: NO_CACHE_HEADERS }
+    );
   }
 }
 
@@ -290,7 +400,7 @@ export async function PUT(request: Request) {
     } = body;
 
     if (!id) {
-      return NextResponse.json({ error: "Thiếu ID thành viên." }, { status: 400 });
+      return NextResponse.json({ error: "Thiếu ID thành viên." }, { status: 400, headers: NO_CACHE_HEADERS });
     }
 
     // Xử lý phê duyệt / từ chối nhanh từ Admin
@@ -299,11 +409,24 @@ export async function PUT(request: Request) {
         where: { id },
         data: { status: "approved", isVerified: true } as any,
       });
-      return NextResponse.json({
-        success: true,
-        message: `Đã phê duyệt thành viên "${approved.fullName}" lên cây gia phả chính!`,
-        member: approved,
-      });
+
+      if (isSupabaseConfigured()) {
+        try {
+          const sbAdmin = getSupabaseAdmin();
+          await sbAdmin.from("members").update({ status: "approved" }).eq("id", id);
+        } catch (e) {
+          console.warn("Supabase approve sync:", e);
+        }
+      }
+
+      return NextResponse.json(
+        {
+          success: true,
+          message: `Đã phê duyệt thành viên "${approved.fullName}" lên cây gia phả chính!`,
+          member: approved,
+        },
+        { headers: NO_CACHE_HEADERS }
+      );
     }
 
     if (action === "REJECT") {
@@ -311,28 +434,41 @@ export async function PUT(request: Request) {
         where: { id },
         data: { status: "rejected" } as any,
       });
-      return NextResponse.json({
-        success: true,
-        message: `Đã từ chối đề xuất thành viên "${rejected.fullName}".`,
-        member: rejected,
-      });
+
+      if (isSupabaseConfigured()) {
+        try {
+          const sbAdmin = getSupabaseAdmin();
+          await sbAdmin.from("members").update({ status: "rejected" }).eq("id", id);
+        } catch (e) {
+          console.warn("Supabase reject sync:", e);
+        }
+      }
+
+      return NextResponse.json(
+        {
+          success: true,
+          message: `Đã từ chối đề xuất thành viên "${rejected.fullName}".`,
+          member: rejected,
+        },
+        { headers: NO_CACHE_HEADERS }
+      );
     }
 
     if (!fullName) {
-      return NextResponse.json({ error: "Thiếu thông tin họ và tên thành viên." }, { status: 400 });
+      return NextResponse.json({ error: "Thiếu thông tin họ và tên thành viên." }, { status: 400, headers: NO_CACHE_HEADERS });
     }
 
     // Kiểm tra chu trình huyết thống nếu có thay đổi cha/mẹ
     if (fatherId && (await wouldCreateCycle(id, fatherId))) {
       return NextResponse.json(
         { error: "Ràng buộc huyết thống vi phạm: Không thể chọn người là hậu duệ làm Cha!" },
-        { status: 400 }
+        { status: 400, headers: NO_CACHE_HEADERS }
       );
     }
     if (motherId && (await wouldCreateCycle(id, motherId))) {
       return NextResponse.json(
         { error: "Ràng buộc huyết thống vi phạm: Không thể chọn người là hậu duệ làm Mẹ!" },
-        { status: 400 }
+        { status: 400, headers: NO_CACHE_HEADERS }
       );
     }
 
@@ -404,14 +540,51 @@ export async function PUT(request: Request) {
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Cập nhật hồ sơ thành viên thành công!",
-      member: updated,
-    });
+    // Đồng bộ sang Supabase PostgreSQL nếu được cấu hình
+    if (isSupabaseConfigured()) {
+      try {
+        const sbAdmin = getSupabaseAdmin();
+        await sbAdmin.from("members").update({
+          full_name: updated.fullName,
+          gender: (gender || updated.gender || "male").toLowerCase(),
+          generation_level: updated.generation,
+          birth_order_title: updated.birthOrder,
+          is_alive: updated.isAlive,
+          is_martyr: updated.isMartyr,
+          birth_date_solar: updated.birthSolar ? new Date(updated.birthSolar) : null,
+          death_date_solar: updated.deathSolar ? new Date(updated.deathSolar) : null,
+          birth_date_lunar: updated.birthLunar,
+          death_date_lunar: updated.deathLunar,
+          burial_location: updated.burialPlace,
+          bio: updated.biography,
+          avatar_url: updated.avatarUrl,
+          father_id: updated.fatherId,
+          mother_id: updated.motherId,
+          spouse_id: spouseId !== undefined ? (spouseId || null) : undefined,
+        }).eq("id", id);
+      } catch (sbErr) {
+        console.warn("Supabase member update sync error:", sbErr);
+      }
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Cập nhật hồ sơ thành viên thành công!",
+        member: {
+          ...updated,
+          spouseId: spouseId !== undefined ? spouseId : null,
+          spouses: spouseId ? [{ id: spouseId, relation: "SPOUSE" }] : [],
+        },
+      },
+      { headers: NO_CACHE_HEADERS }
+    );
   } catch (error: any) {
     console.error("Members PUT error:", error);
-    return NextResponse.json({ error: "Lỗi khi cập nhật thành viên: " + (error?.message || "") }, { status: 500 });
+    return NextResponse.json(
+      { error: "Lỗi khi cập nhật thành viên: " + (error?.message || "") },
+      { status: 500, headers: NO_CACHE_HEADERS }
+    );
   }
 }
 
@@ -421,7 +594,7 @@ export async function DELETE(request: Request) {
     const id = searchParams.get("id");
 
     if (!id) {
-      return NextResponse.json({ error: "Thiếu ID thành viên cần xóa." }, { status: 400 });
+      return NextResponse.json({ error: "Thiếu ID thành viên cần xóa." }, { status: 400, headers: NO_CACHE_HEADERS });
     }
 
     // Kiểm tra xem thành viên có con cái hay không
@@ -436,7 +609,7 @@ export async function DELETE(request: Request) {
         {
           error: `Không thể xóa thành viên này vì đang có ${childCount} người con phụ thuộc trong cây gia phả. Hãy điều chuyển liên kết con cái trước!`,
         },
-        { status: 400 }
+        { status: 400, headers: NO_CACHE_HEADERS }
       );
     }
 
@@ -459,12 +632,28 @@ export async function DELETE(request: Request) {
       where: { id },
     });
 
-    return NextResponse.json({
-      success: true,
-      message: "Đã xóa hồ sơ thành viên thành công.",
-    });
+    // Đồng bộ xóa sang Supabase nếu được cấu hình
+    if (isSupabaseConfigured()) {
+      try {
+        const sbAdmin = getSupabaseAdmin();
+        await sbAdmin.from("members").delete().eq("id", id);
+      } catch (sbErr) {
+        console.warn("Supabase member delete sync error:", sbErr);
+      }
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Đã xóa hồ sơ thành viên thành công.",
+      },
+      { headers: NO_CACHE_HEADERS }
+    );
   } catch (error: any) {
     console.error("Members DELETE error:", error);
-    return NextResponse.json({ error: "Lỗi khi xóa thành viên: " + (error?.message || "") }, { status: 500 });
+    return NextResponse.json(
+      { error: "Lỗi khi xóa thành viên: " + (error?.message || "") },
+      { status: 500, headers: NO_CACHE_HEADERS }
+    );
   }
 }

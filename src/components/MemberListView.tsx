@@ -54,8 +54,12 @@ export default function MemberListView({
       if (generation !== "ALL") params.set("generation", generation);
       if (gender !== "ALL") params.set("gender", gender);
       if (isAlive !== "ALL") params.set("isAlive", isAlive);
+      params.set("_t", String(Date.now()));
 
-      const res = await fetch(`/api/members?${params.toString()}`);
+      const res = await fetch(`/api/members?${params.toString()}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
       const data = await res.json();
       if (data.members) {
         setMembers(data.members);

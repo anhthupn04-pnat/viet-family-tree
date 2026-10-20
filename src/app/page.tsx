@@ -78,6 +78,7 @@ export default function HomePage() {
   const [kinshipPreselectedB, setKinshipPreselectedB] = useState<string | undefined>();
   const [focusedMemberId, setFocusedMemberId] = useState<string | null>(null);
   const [treeRefreshKey, setTreeRefreshKey] = useState<number>(0);
+  const [latestSavedMember, setLatestSavedMember] = useState<any | null>(null);
 
   // Toast notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -104,17 +105,22 @@ export default function HomePage() {
 
   // Refresh all application data (tree canvas, member list, branches, pending count)
   const refreshAllData = () => {
-    setTreeRefreshKey((prev) => prev + 1);
-    fetchClanData();
-    fetchBranches();
-    fetchMembersList();
-    fetchPendingCount();
+    const t = Date.now();
+    setTreeRefreshKey(t);
+    fetchClanData(t);
+    fetchBranches(t);
+    fetchMembersList(t);
+    fetchPendingCount(t);
   };
 
-  // Fetch initial clan data & branches
-  const fetchClanData = async () => {
+  // Fetch initial clan data & branches with cache-busting
+  const fetchClanData = async (t?: number) => {
     try {
-      const res = await fetch("/api/clans");
+      const ts = t || Date.now();
+      const res = await fetch(`/api/clans?_t=${ts}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
       const data = await res.json();
       if (data.clan) {
         setClan(data.clan);
@@ -127,9 +133,13 @@ export default function HomePage() {
     }
   };
 
-  const fetchBranches = async () => {
+  const fetchBranches = async (t?: number) => {
     try {
-      const res = await fetch("/api/branches");
+      const ts = t || Date.now();
+      const res = await fetch(`/api/branches?_t=${ts}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
       const data = await res.json();
       if (data.branches) {
         setBranches(data.branches);
@@ -139,9 +149,13 @@ export default function HomePage() {
     }
   };
 
-  const fetchMembersList = async () => {
+  const fetchMembersList = async (t?: number) => {
     try {
-      const res = await fetch("/api/members");
+      const ts = t || Date.now();
+      const res = await fetch(`/api/members?_t=${ts}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
       const data = await res.json();
       if (data.members) {
         setAllMembers(data.members);
@@ -151,11 +165,18 @@ export default function HomePage() {
     }
   };
 
-  const fetchPendingCount = async () => {
+  const fetchPendingCount = async (t?: number) => {
     try {
+      const ts = t || Date.now();
       const [resM, resR] = await Promise.all([
-        fetch("/api/members?status=pending"),
-        fetch("/api/change-requests"),
+        fetch(`/api/members?status=pending&_t=${ts}`, {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache" },
+        }),
+        fetch(`/api/change-requests?_t=${ts}`, {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache" },
+        }),
       ]);
       const dataM = await resM.json();
       const dataR = await resR.json();
@@ -226,6 +247,8 @@ export default function HomePage() {
       }
       showToast(data.message || "Đã xóa thành công.");
       setSelectedMember(null);
+      setLatestSavedMember(null);
+      setAllMembers((prev) => prev.filter((m) => m.id !== id));
       refreshAllData();
     } catch (err: any) {
       alert(err.message || "Lỗi khi xóa thành viên.");
@@ -397,6 +420,7 @@ export default function HomePage() {
               isAdmin={isAdmin}
               clanName={clan?.name || "Gia phả dòng họ"}
               refreshKey={treeRefreshKey}
+              latestSavedMember={latestSavedMember}
             />
           </div>
         )}
@@ -517,17 +541,23 @@ export default function HomePage() {
           setShowMemberFormModal(false);
           setEditingMember(null);
         }}
-        onSuccess={(msg) => {
+        onSuccess={(msg, savedMember) => {
           setShowMemberFormModal(false);
           setEditingMember(null);
-          refreshAllData();
-          if (msg) {
-            showToast(msg);
-          } else if (!isAdmin) {
-            showToast("Yêu cầu của bạn đã được gửi tới Quản trị viên và đang chờ duyệt.");
-          } else {
-            showToast("Đã lưu hồ sơ thành viên thành công!");
+          if (savedMember) {
+            setLatestSavedMember(savedMember);
+            setAllMembers((prev) => {
+              const idx = prev.findIndex((m) => m.id === savedMember.id);
+              if (idx >= 0) {
+                const next = [...prev];
+                next[idx] = { ...next[idx], ...savedMember };
+                return next;
+              }
+              return [savedMember, ...prev];
+            });
           }
+          refreshAllData();
+          showToast(msg || "Đã lưu và cập nhật hồ sơ thành viên thành công!");
         }}
         editingMember={editingMember}
         branches={branches}

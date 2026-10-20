@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const NO_CACHE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  "CDN-Cache-Control": "no-store",
+  "Vercel-CDN-Cache-Control": "no-store",
+};
+
 export async function GET() {
   try {
     let clan: any = null;
@@ -27,21 +36,24 @@ export async function GET() {
 
     if (!clan) {
       const { MOCK_CLAN, MOCK_BRANCHES, MOCK_MEMBERS } = await import("@/lib/mockData");
-      return NextResponse.json({
-        clan: {
-          ...MOCK_CLAN,
-          branches: MOCK_BRANCHES,
+      return NextResponse.json(
+        {
+          clan: {
+            ...MOCK_CLAN,
+            branches: MOCK_BRANCHES,
+          },
+          stats: {
+            totalMembers: MOCK_MEMBERS.length,
+            totalBranches: MOCK_BRANCHES.length,
+            totalGenerations: 3,
+            aliveCount: MOCK_MEMBERS.filter((m) => m.isAlive).length,
+            deceasedCount: MOCK_MEMBERS.filter((m) => !m.isAlive).length,
+            maleCount: MOCK_MEMBERS.filter((m) => m.gender === "MALE").length,
+            femaleCount: MOCK_MEMBERS.filter((m) => m.gender === "FEMALE").length,
+          },
         },
-        stats: {
-          totalMembers: MOCK_MEMBERS.length,
-          totalBranches: MOCK_BRANCHES.length,
-          totalGenerations: 3,
-          aliveCount: MOCK_MEMBERS.filter((m) => m.isAlive).length,
-          deceasedCount: MOCK_MEMBERS.filter((m) => !m.isAlive).length,
-          maleCount: MOCK_MEMBERS.filter((m) => m.gender === "MALE").length,
-          femaleCount: MOCK_MEMBERS.filter((m) => m.gender === "FEMALE").length,
-        },
-      });
+        { headers: NO_CACHE_HEADERS }
+      );
     }
 
     // Thống kê thành viên
@@ -60,36 +72,42 @@ export async function GET() {
     const maleCount = members.filter((m) => m.gender === "MALE").length;
     const femaleCount = members.filter((m) => m.gender === "FEMALE").length;
 
-    return NextResponse.json({
-      clan,
-      stats: {
-        totalMembers: members.length,
-        totalBranches: clan.branches.length,
-        totalGenerations: maxGen,
-        aliveCount,
-        deceasedCount,
-        maleCount,
-        femaleCount,
+    return NextResponse.json(
+      {
+        clan,
+        stats: {
+          totalMembers: members.length,
+          totalBranches: clan.branches.length,
+          totalGenerations: maxGen,
+          aliveCount,
+          deceasedCount,
+          maleCount,
+          femaleCount,
+        },
       },
-    });
+      { headers: NO_CACHE_HEADERS }
+    );
   } catch (error: any) {
     console.error("Clan GET error:", error);
     const { MOCK_CLAN, MOCK_BRANCHES, MOCK_MEMBERS } = await import("@/lib/mockData");
-    return NextResponse.json({
-      clan: {
-        ...MOCK_CLAN,
-        branches: MOCK_BRANCHES,
+    return NextResponse.json(
+      {
+        clan: {
+          ...MOCK_CLAN,
+          branches: MOCK_BRANCHES,
+        },
+        stats: {
+          totalMembers: MOCK_MEMBERS.length,
+          totalBranches: MOCK_BRANCHES.length,
+          totalGenerations: 3,
+          aliveCount: MOCK_MEMBERS.filter((m) => m.isAlive).length,
+          deceasedCount: MOCK_MEMBERS.filter((m) => !m.isAlive).length,
+          maleCount: MOCK_MEMBERS.filter((m) => m.gender === "MALE").length,
+          femaleCount: MOCK_MEMBERS.filter((m) => m.gender === "FEMALE").length,
+        },
       },
-      stats: {
-        totalMembers: MOCK_MEMBERS.length,
-        totalBranches: MOCK_BRANCHES.length,
-        totalGenerations: 3,
-        aliveCount: MOCK_MEMBERS.filter((m) => m.isAlive).length,
-        deceasedCount: MOCK_MEMBERS.filter((m) => !m.isAlive).length,
-        maleCount: MOCK_MEMBERS.filter((m) => m.gender === "MALE").length,
-        femaleCount: MOCK_MEMBERS.filter((m) => m.gender === "FEMALE").length,
-      },
-    });
+      { headers: NO_CACHE_HEADERS }
+    );
   }
 }
 

@@ -57,6 +57,7 @@ export interface MemberNode {
   branchName?: string | null;
   fatherId?: string | null;
   motherId?: string | null;
+  spouseId?: string | null;
   spouses?: any[];
   childrenIds?: string[];
   biography?: string | null;
@@ -87,6 +88,7 @@ interface FamilyTreeCanvasProps {
   isAdmin: boolean;
   clanName?: string;
   refreshKey?: number;
+  latestSavedMember?: any | null;
 }
 
 // Stylized Golden Royal Dragon (Rồng Vàng Hoàng Kim chầu phụng)
@@ -146,6 +148,7 @@ export default function FamilyTreeCanvas({
   isAdmin,
   clanName = "Gia phả dòng họ",
   refreshKey,
+  latestSavedMember,
 }: FamilyTreeCanvasProps) {
   const [members, setMembers] = useState<MemberNode[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
@@ -196,14 +199,54 @@ export default function FamilyTreeCanvas({
     return () => document.removeEventListener("mousedown", handleOutside);
   }, []);
 
-  // Fetch tree and branches data
+  // Optimistically inject or update newly saved member for zero latency
+  useEffect(() => {
+    if (!latestSavedMember) return;
+    setMembers((prev) => {
+      const exists = prev.some((m) => m.id === latestSavedMember.id);
+      const formattedNode: MemberNode = {
+        id: latestSavedMember.id,
+        memberCode: latestSavedMember.memberCode || `GP-${latestSavedMember.id.slice(0, 4)}`,
+        fullName: latestSavedMember.fullName,
+        gender: (latestSavedMember.gender || "MALE").toUpperCase() as any,
+        generation: Number(latestSavedMember.generation) || 1,
+        birthOrder: latestSavedMember.birthOrder || null,
+        isAlive: latestSavedMember.isAlive !== undefined ? latestSavedMember.isAlive : true,
+        isMartyr: Boolean(latestSavedMember.isMartyr),
+        birthSolar: latestSavedMember.birthSolar || null,
+        deathSolar: latestSavedMember.deathSolar || null,
+        birthLunar: latestSavedMember.birthLunar || null,
+        deathLunar: latestSavedMember.deathLunar || null,
+        avatarUrl: latestSavedMember.avatarUrl || null,
+        burialPlace: latestSavedMember.burialPlace || null,
+        biography: latestSavedMember.biography || null,
+        fatherId: latestSavedMember.fatherId || null,
+        motherId: latestSavedMember.motherId || null,
+        spouseId: latestSavedMember.spouseId || null,
+        spouses: latestSavedMember.spouseId
+          ? [{ id: latestSavedMember.spouseId, fullName: "Phối ngẫu", relation: "SPOUSE" }]
+          : [],
+        childrenIds: [],
+      };
+      if (exists) {
+        return prev.map((m) => (m.id === latestSavedMember.id ? { ...m, ...formattedNode } : m));
+      } else {
+        return [...prev, formattedNode];
+      }
+    });
+  }, [latestSavedMember]);
+
+  // Fetch tree and branches data with cache-busting timestamp
   const loadTree = async () => {
     try {
       setLoading(true);
-      const url = selectedBranch !== "ALL" ? `/api/tree?branchId=${selectedBranch}` : "/api/tree";
+      const t = Date.now();
+      const url = selectedBranch !== "ALL"
+        ? `/api/tree?branchId=${selectedBranch}&_t=${t}`
+        : `/api/tree?_t=${t}`;
       const [resTree, resBranches] = await Promise.all([
-        fetch(url),
-        fetch("/api/branches"),
+        fetch(url, { cache: "no-store", headers: { "Cache-Control": "no-cache" } }),
+        fetch(`/api/branches?_t=${t}`, { cache: "no-store", headers: { "Cache-Control": "no-cache" } }),
       ]);
 
       const dataTree = await resTree.json();

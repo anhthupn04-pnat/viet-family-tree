@@ -70,7 +70,10 @@ export default function AdminView({
   const fetchPendingMembers = async () => {
     try {
       setLoadingMembers(true);
-      const res = await fetch("/api/members?status=pending");
+      const res = await fetch(`/api/members?status=pending&_t=${Date.now()}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
       const data = await res.json();
       if (data.members) {
         setPendingMembers(data.members);
@@ -85,7 +88,10 @@ export default function AdminView({
   const fetchRequests = async () => {
     try {
       setLoadingRequests(true);
-      const res = await fetch("/api/change-requests");
+      const res = await fetch(`/api/change-requests?_t=${Date.now()}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
       const data = await res.json();
       if (data.requests) {
         setRequests(data.requests);
@@ -100,7 +106,10 @@ export default function AdminView({
   const fetchAuditLogs = async () => {
     try {
       setLoadingLogs(true);
-      const res = await fetch("/api/audit-logs");
+      const res = await fetch(`/api/audit-logs?_t=${Date.now()}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
       const data = await res.json();
       if (data.logs) {
         setAuditLogs(data.logs);

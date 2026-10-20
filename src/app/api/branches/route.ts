@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const NO_CACHE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  "CDN-Cache-Control": "no-store",
+  "Vercel-CDN-Cache-Control": "no-store",
+};
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -25,14 +34,14 @@ export async function GET(request: Request) {
 
     if (!branches || branches.length === 0) {
       const { MOCK_BRANCHES } = await import("@/lib/mockData");
-      return NextResponse.json({ branches: MOCK_BRANCHES });
+      return NextResponse.json({ branches: MOCK_BRANCHES }, { headers: NO_CACHE_HEADERS });
     }
 
-    return NextResponse.json({ branches });
+    return NextResponse.json({ branches }, { headers: NO_CACHE_HEADERS });
   } catch (error: any) {
     console.error("Branches GET error:", error);
     const { MOCK_BRANCHES } = await import("@/lib/mockData");
-    return NextResponse.json({ branches: MOCK_BRANCHES });
+    return NextResponse.json({ branches: MOCK_BRANCHES }, { headers: NO_CACHE_HEADERS });
   }
 }
 

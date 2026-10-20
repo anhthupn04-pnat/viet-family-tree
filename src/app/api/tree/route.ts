@@ -1,12 +1,84 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { MOCK_MEMBERS } from "@/lib/mockData";
+import { supabase, isSupabaseConfigured } from "@/lib/supabaseClient";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const NO_CACHE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  "CDN-Cache-Control": "no-store",
+  "Vercel-CDN-Cache-Control": "no-store",
+};
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const branchId = searchParams.get("branchId");
 
+    // 1. Kiểm tra nếu có cấu hình Supabase thì ưu tiên truy vấn Supabase Postgres
+    if (isSupabaseConfigured()) {
+      try {
+        let query = supabase
+          .from("members")
+          .select("*")
+          .eq("status", "approved")
+          .order("generation_level", { ascending: true })
+          .order("order_in_family", { ascending: true, nullsFirst: false });
+
+        const { data: sbMembers, error: sbErr } = await query;
+
+        if (!sbErr && sbMembers && sbMembers.length > 0) {
+          const formattedList = sbMembers.map((m: any) => ({
+            id: m.id,
+            memberCode: `GP-G${m.generation_level}-${m.id.slice(0, 4)}`,
+            fullName: m.full_name,
+            gender: (m.gender || "male").toUpperCase(),
+            generation: m.generation_level,
+            birthOrder: m.birth_order_title || (m.order_in_family ? `Con thứ ${m.order_in_family}` : null),
+            isAlive: m.is_alive,
+            isMartyr: Boolean(m.is_martyr),
+            birthSolar: m.birth_date_solar,
+            deathSolar: m.death_date_solar,
+            birthLunar: m.birth_date_lunar,
+            deathLunar: m.death_date_lunar,
+            avatarUrl: m.avatar_url,
+            burialPlace: m.burial_location,
+            biography: m.bio,
+            fatherId: m.father_id,
+            motherId: m.mother_id,
+            spouseId: m.spouse_id,
+            spouses: m.spouse_id
+              ? [{ id: m.spouse_id, fullName: "Phối ngẫu", relation: "SPOUSE" }]
+              : [],
+            childrenIds: sbMembers
+              .filter((c: any) => c.father_id === m.id || c.mother_id === m.id)
+              .map((c: any) => c.id),
+          }));
+
+          const maxGen = formattedList.reduce((acc: number, item: any) => Math.max(acc, item.generation), 1);
+          const generationsMap: Record<number, any[]> = {};
+          for (let g = 1; g <= maxGen; g++) generationsMap[g] = [];
+          formattedList.forEach((m: any) => generationsMap[m.generation].push(m));
+
+          return NextResponse.json(
+            {
+              members: formattedList,
+              generations: generationsMap,
+              totalMembers: formattedList.length,
+              maxGeneration: maxGen,
+              source: "supabase",
+            },
+            { headers: NO_CACHE_HEADERS }
+          );
+        }
+      } catch (sbEx) {
+        console.warn("Supabase fetch error, fallback to Prisma:", sbEx);
+      }
+    }
+
+    // 2. Truy vấn từ Prisma SQLite (local hoặc fallback)
     const where: any = {
       status: { notIn: ["pending", "rejected"] },
     };
@@ -155,19 +227,25 @@ export async function GET(request: Request) {
       generationsMap[m.generation].push(formatted);
     });
 
-    return NextResponse.json({
-      members: formattedList,
-      generations: generationsMap,
-      totalMembers: formattedList.length,
-      maxGeneration: maxGen,
-    });
+    return NextResponse.json(
+      {
+        members: formattedList,
+        generations: generationsMap,
+        totalMembers: formattedList.length,
+        maxGeneration: maxGen,
+      },
+      { headers: NO_CACHE_HEADERS }
+    );
   } catch (error: any) {
     console.error("Tree GET error:", error);
     // Ultimate fallback to MOCK_MEMBERS
-    return NextResponse.json({
-      members: MOCK_MEMBERS,
-      totalMembers: MOCK_MEMBERS.length,
-      maxGeneration: 3,
-    });
+    return NextResponse.json(
+      {
+        members: MOCK_MEMBERS,
+        totalMembers: MOCK_MEMBERS.length,
+        maxGeneration: 3,
+      },
+      { headers: NO_CACHE_HEADERS }
+    );
   }
 }
