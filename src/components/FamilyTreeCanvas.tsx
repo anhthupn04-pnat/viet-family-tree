@@ -104,11 +104,10 @@ function FamilyTreeCanvasInner({
           duration: 700,
         });
       }
-      onSelectMember(member);
       setShowSearchDropdown(false);
       setSearch("");
     },
-    [nodes, setCenter, onSelectMember]
+    [nodes, setCenter]
   );
 
   useEffect(() => {

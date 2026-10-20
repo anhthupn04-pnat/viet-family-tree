@@ -100,7 +100,6 @@ export default function FamilyNode({ data }: FamilyNodeProps) {
           : "hover:shadow-xl hover:-translate-y-1"
       }`}
       style={{ width: 220, minHeight: 140 }}
-      onClick={() => onSelectMember(member)}
     >
       {/* Handles for connections */}
       {/* Top Handle for Parent-to-Child descent */}

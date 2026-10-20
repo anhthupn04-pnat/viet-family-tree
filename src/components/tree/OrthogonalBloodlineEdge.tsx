@@ -28,16 +28,24 @@ export default function OrthogonalBloodlineEdge({
       ? (data as any).branchY
       : (startY + targetY) / 2;
 
-  const [edgePath] = getSmoothStepPath({
-    sourceX: startX,
-    sourceY: startY,
-    sourcePosition: Position.Bottom,
-    targetX,
-    targetY,
-    targetPosition: Position.Top,
-    borderRadius: 6,
-    centerY: branchY,
-  });
+  let edgePath = "";
+  // Nếu chỉ có 1 con và nằm thẳng hàng bên dưới cha mẹ: vẽ đường thẳng đứng trực tiếp
+  if (Math.abs(startX - targetX) <= 4) {
+    edgePath = `M ${startX} ${startY} L ${targetX} ${targetY}`;
+  } else {
+    // Đường chữ T vuông góc chuẩn mực đâm từ giữa cha mẹ xuống nhánh ngang rồi rẽ nhánh thẳng đứng vào từng con
+    const [path] = getSmoothStepPath({
+      sourceX: startX,
+      sourceY: startY,
+      sourcePosition: Position.Bottom,
+      targetX,
+      targetY,
+      targetPosition: Position.Top,
+      borderRadius: 4,
+      centerY: branchY,
+    });
+    edgePath = path;
+  }
 
   return (
     <BaseEdge

@@ -97,8 +97,6 @@ function HomePageContent() {
         onOpenAddMember={handleOpenAddMember}
         onFocusMember={(id) => {
           setFocusedMemberId(id);
-          const found = members.find((m) => m.id === id);
-          if (found) setSelectedMember(found);
         }}
       />
 
@@ -211,6 +209,7 @@ function HomePageContent() {
         onShowToast={showToast}
         onSuccess={(savedId) => {
           setActiveTab("tree");
+          setSelectedMember(null);
           if (savedId) {
             setFocusedMemberId(savedId);
           }

@@ -4,15 +4,20 @@ import { Member } from "@/types/family";
 export const NODE_WIDTH = 220;
 export const NODE_HEIGHT = 140;
 export const SPOUSE_GAP = 28;
-export const SIBLING_GAP = 48;
+export const SIBLING_GAP = 40;
+export const FAMILY_GAP = 60;
 export const LEVEL_HEIGHT = 270;
 export const BASE_Y = 60;
 export const BASE_X = 60;
 
-export interface FamilyUnit {
+interface TreeUnit {
+  id: string;
   primary: Member;
   spouse?: Member;
+  generation: number;
+  children: TreeUnit[];
   width: number;
+  subtreeWidth: number;
   x: number;
   y: number;
 }
@@ -36,135 +41,159 @@ export function computeFamilyTreeLayout(
   const memberMap = new Map<string, Member>();
   members.forEach((m) => memberMap.set(m.id, m));
 
-  // Phân chia theo thế hệ (đời)
-  const genMap = new Map<number, Member[]>();
+  // 1. Phân nhóm các đơn vị gia đình (TreeUnit: Thành viên chính + Vợ/Chồng)
+  const handled = new Set<string>();
+  const units: TreeUnit[] = [];
+  const memberToUnit = new Map<string, TreeUnit>();
+
   members.forEach((m) => {
-    const gen = m.generation || 1;
-    if (!genMap.has(gen)) {
-      genMap.set(gen, []);
+    if (handled.has(m.id)) return;
+
+    let spouse: Member | undefined = undefined;
+    if (m.spouseId && memberMap.has(m.spouseId)) {
+      spouse = memberMap.get(m.spouseId);
     }
-    genMap.get(gen)!.push(m);
+
+    let primary = m;
+    let secondary = spouse;
+
+    if (spouse) {
+      handled.add(spouse.id);
+
+      // Nếu một người là con ruột trong dòng họ (có cha/mẹ) còn người kia là dâu/rể,
+      // thì người con ruột luôn là primary để xác định nguồn huyết thống
+      const mHasParents = Boolean(m.fatherId || m.motherId);
+      const spHasParents = Boolean(spouse.fatherId || spouse.motherId);
+
+      if (!mHasParents && spHasParents) {
+        primary = spouse;
+        secondary = m;
+      } else if (primary.gender === "female" && spouse.gender === "male") {
+        primary = spouse;
+        secondary = m;
+      }
+    }
+    handled.add(m.id);
+
+    const unitWidth = secondary ? 2 * NODE_WIDTH + SPOUSE_GAP : NODE_WIDTH;
+    const unit: TreeUnit = {
+      id: "unit-" + primary.id,
+      primary,
+      spouse: secondary,
+      generation: primary.generation || 1,
+      children: [],
+      width: unitWidth,
+      subtreeWidth: unitWidth,
+      x: 0,
+      y: 0,
+    };
+
+    units.push(unit);
+    memberToUnit.set(primary.id, unit);
+    if (secondary) {
+      memberToUnit.set(secondary.id, unit);
+    }
   });
 
-  const sortedGens = Array.from(genMap.keys()).sort((a, b) => a - b);
-  const nodePositions = new Map<string, { x: number; y: number }>();
+  // 2. Thiết lập quan hệ Phụ mẫu -> Con cái theo mẫu cây phả hệ
+  // Mỗi người con chỉ thuộc về DUY NHẤT một cặp phụ mẫu của chính họ
+  const rootUnits: TreeUnit[] = [];
 
-  // 1. Nhóm các đơn vị gia đình (Family Units: Vợ và Chồng đứng song song liền kề)
-  const genUnitsMap = new Map<number, FamilyUnit[]>();
+  units.forEach((unit) => {
+    const p = unit.primary;
+    const fatherId = p.fatherId;
+    const motherId = p.motherId;
 
-  sortedGens.forEach((gen) => {
-    const genMembers = genMap.get(gen)!;
-    const handledInGen = new Set<string>();
-    const units: FamilyUnit[] = [];
+    let parentUnit: TreeUnit | null = null;
+    if (fatherId && memberToUnit.has(fatherId)) {
+      parentUnit = memberToUnit.get(fatherId)!;
+    } else if (motherId && memberToUnit.has(motherId)) {
+      parentUnit = memberToUnit.get(motherId)!;
+    }
 
-    genMembers.forEach((m) => {
-      if (handledInGen.has(m.id)) return;
+    if (parentUnit && parentUnit !== unit) {
+      parentUnit.children.push(unit);
+    } else {
+      rootUnits.push(unit);
+    }
+  });
 
-      let spouse: Member | undefined = undefined;
-      if (m.spouseId && memberMap.has(m.spouseId)) {
-        const sp = memberMap.get(m.spouseId)!;
-        if (sp.generation === gen && !handledInGen.has(sp.id)) {
-          spouse = sp;
-          handledInGen.add(sp.id);
-        }
-      }
+  // Sắp xếp các nhánh gốc theo thế hệ và thứ tự gia đình
+  rootUnits.sort((a, b) => {
+    if (a.generation !== b.generation) return a.generation - b.generation;
+    return (a.primary.orderInFamily || 99) - (b.primary.orderInFamily || 99);
+  });
 
-      // Sắp xếp: Chồng bên trái, Vợ bên phải (song song liền kề)
-      let primary = m;
-      if (spouse && m.gender === "female" && spouse.gender === "male") {
-        primary = spouse;
-        spouse = m;
-      }
-      handledInGen.add(m.id);
+  // 3. Tính toán độ rộng cây con (Subtree Width) từ dưới lên (Bottom-up)
+  function computeSubtreeWidth(unit: TreeUnit): number {
+    if (unit.children.length === 0) {
+      unit.subtreeWidth = unit.width;
+      return unit.width;
+    }
 
-      const unitWidth = spouse ? 2 * NODE_WIDTH + SPOUSE_GAP : NODE_WIDTH;
-      units.push({
-        primary,
-        spouse,
-        width: unitWidth,
-        x: 0,
-        y: BASE_Y + (gen - 1) * LEVEL_HEIGHT,
-      });
-    });
-
-    // Sắp xếp các đơn vị trong cùng thế hệ theo thứ tự con (orderInFamily)
-    units.sort((a, b) => {
-      const orderA = a.primary.orderInFamily ?? (a.spouse?.orderInFamily ?? 99);
-      const orderB = b.primary.orderInFamily ?? (b.spouse?.orderInFamily ?? 99);
+    // Sắp xếp các con của đơn vị này theo thứ tự anh em (orderInFamily)
+    unit.children.sort((a, b) => {
+      const orderA = a.primary.orderInFamily ?? 99;
+      const orderB = b.primary.orderInFamily ?? 99;
       return orderA - orderB;
     });
 
-    genUnitsMap.set(gen, units);
-  });
-
-  // 2. Tính toán vị trí X cho từng thế hệ
-  // Đặt thế hệ 2 trước hoặc lần lượt để căn giữa hài hòa
-  sortedGens.forEach((gen) => {
-    const units = genUnitsMap.get(gen) || [];
-    let currentX = BASE_X;
-
-    units.forEach((unit) => {
-      // Tìm vị trí của cha mẹ nếu có
-      const fatherId = unit.primary.fatherId || unit.spouse?.fatherId;
-      const motherId = unit.primary.motherId || unit.spouse?.motherId;
-
-      let parentCenterX: number | null = null;
-      if (fatherId && nodePositions.has(fatherId)) {
-        const fPos = nodePositions.get(fatherId)!;
-        if (motherId && nodePositions.has(motherId)) {
-          const mPos = nodePositions.get(motherId)!;
-          parentCenterX = (fPos.x + mPos.x + NODE_WIDTH) / 2;
-        } else {
-          parentCenterX = fPos.x + NODE_WIDTH / 2;
-        }
-      } else if (motherId && nodePositions.has(motherId)) {
-        const mPos = nodePositions.get(motherId)!;
-        parentCenterX = mPos.x + NODE_WIDTH / 2;
-      }
-
-      if (parentCenterX !== null) {
-        const idealX = parentCenterX - unit.width / 2;
-        unit.x = Math.max(currentX, idealX);
-      } else {
-        unit.x = currentX;
-      }
-
-      currentX = unit.x + unit.width + SIBLING_GAP;
+    let totalChildWidth = 0;
+    unit.children.forEach((c, idx) => {
+      const w = computeSubtreeWidth(c);
+      totalChildWidth += w;
+      if (idx > 0) totalChildWidth += SIBLING_GAP;
     });
 
-    // Lưu tọa độ của từng thành viên trong đơn vị
-    units.forEach((unit) => {
-      nodePositions.set(unit.primary.id, { x: unit.x, y: unit.y });
-      if (unit.spouse) {
-        // Vợ đứng song song liền kề chồng cùng hàng Y
-        nodePositions.set(unit.spouse.id, {
-          x: unit.x + NODE_WIDTH + SPOUSE_GAP,
-          y: unit.y,
-        });
-      }
-    });
-  });
+    unit.subtreeWidth = Math.max(unit.width, totalChildWidth);
+    return unit.subtreeWidth;
+  }
 
-  // Tinh chỉnh: Nếu Đời 1 có con cái ở Đời 2, căn giữa cặp Đời 1 ngay phía trên các con
-  const gen1Units = genUnitsMap.get(1) || [];
-  const gen2Units = genUnitsMap.get(2) || [];
-  if (gen1Units.length === 1 && gen2Units.length > 0) {
-    const minGen2X = gen2Units[0].x;
-    const maxGen2X = gen2Units[gen2Units.length - 1].x + gen2Units[gen2Units.length - 1].width;
-    const gen2CenterX = (minGen2X + maxGen2X) / 2;
+  // 4. Bố trí vị trí tọa độ (Top-down) đảm bảo:
+  // - Vợ và Chồng đứng song song liền kề nhau trên cùng trục Y
+  // - Cặp cha mẹ luôn được căn chính giữa phía trên đàn con của chính họ
+  // - Các nhánh con cháu độc lập không bị chèn hay đè chéo đường nối
+  const nodePositions = new Map<string, { x: number; y: number }>();
 
-    const unit1 = gen1Units[0];
-    unit1.x = Math.max(BASE_X, gen2CenterX - unit1.width / 2);
-    nodePositions.set(unit1.primary.id, { x: unit1.x, y: unit1.y });
-    if (unit1.spouse) {
-      nodePositions.set(unit1.spouse.id, {
-        x: unit1.x + NODE_WIDTH + SPOUSE_GAP,
-        y: unit1.y,
+  function positionUnitTree(unit: TreeUnit, leftX: number, currentY: number) {
+    unit.y = currentY;
+    // Căn giữa cặp cha mẹ trong không gian subtree của họ
+    unit.x = leftX + (unit.subtreeWidth - unit.width) / 2;
+
+    nodePositions.set(unit.primary.id, { x: unit.x, y: unit.y });
+    if (unit.spouse) {
+      nodePositions.set(unit.spouse.id, {
+        x: unit.x + NODE_WIDTH + SPOUSE_GAP,
+        y: unit.y,
+      });
+    }
+
+    if (unit.children.length > 0) {
+      let totalChildrenWidth = 0;
+      unit.children.forEach((c, idx) => {
+        totalChildrenWidth += c.subtreeWidth;
+        if (idx > 0) totalChildrenWidth += SIBLING_GAP;
+      });
+
+      // Căn giữa tập hợp các con ngay bên dưới cha mẹ
+      let childLeftX = leftX + (unit.subtreeWidth - totalChildrenWidth) / 2;
+      const nextY = currentY + LEVEL_HEIGHT;
+
+      unit.children.forEach((child) => {
+        positionUnitTree(child, childLeftX, nextY);
+        childLeftX += child.subtreeWidth + SIBLING_GAP;
       });
     }
   }
 
-  // 3. Xây dựng danh sách React Flow Nodes
+  let currentRootX = BASE_X;
+  rootUnits.forEach((root) => {
+    computeSubtreeWidth(root);
+    positionUnitTree(root, currentRootX, BASE_Y);
+    currentRootX += root.subtreeWidth + FAMILY_GAP;
+  });
+
+  // 5. Tạo danh sách React Flow Nodes
   const nodes: Node[] = members.map((m) => {
     const pos = nodePositions.get(m.id) || { x: BASE_X, y: BASE_Y };
     return {
@@ -182,94 +211,64 @@ export function computeFamilyTreeLayout(
     };
   });
 
-  // 4. Xây dựng danh sách React Flow Edges
+  // 6. Tạo danh sách React Flow Edges
   const edges: Edge[] = [];
   const handledSpouseEdges = new Set<string>();
 
-  // A. Đường nối ngang hôn phối vợ chồng (Song song liền kề với biểu tượng ♥)
-  members.forEach((m) => {
-    if (m.spouseId && memberMap.has(m.spouseId)) {
-      const spouse = memberMap.get(m.spouseId)!;
-      const pairKey = [m.id, spouse.id].sort().join("---");
+  // A. Đường nối hôn phối ngang (Vợ và Chồng song song liền kề có biểu tượng ♥)
+  units.forEach((unit) => {
+    if (unit.spouse) {
+      const pairKey = [unit.primary.id, unit.spouse.id].sort().join("---");
       if (!handledSpouseEdges.has(pairKey)) {
         handledSpouseEdges.add(pairKey);
 
-        const mPos = nodePositions.get(m.id);
-        const sPos = nodePositions.get(spouse.id);
+        const leftNode = unit.primary;
+        const rightNode = unit.spouse;
 
-        if (mPos && sPos) {
-          const [leftNode, rightNode] = mPos.x <= sPos.x ? [m, spouse] : [spouse, m];
-
-          edges.push({
-            id: `edge-spouse-${leftNode.id}-${rightNode.id}`,
-            source: leftNode.id,
-            target: rightNode.id,
-            sourceHandle: "spouse-right",
-            targetHandle: "spouse-left",
-            type: "straight",
-            style: {
-              stroke: "#E11D48",
-              strokeWidth: 2,
-              strokeDasharray: "4 4",
-            },
-            label: "♥",
-            labelStyle: {
-              fill: "#E11D48",
-              fontWeight: 700,
-              fontSize: 12,
-            },
-          });
-        }
+        edges.push({
+          id: `edge-spouse-${leftNode.id}-${rightNode.id}`,
+          source: leftNode.id,
+          target: rightNode.id,
+          sourceHandle: "spouse-right",
+          targetHandle: "spouse-left",
+          type: "straight",
+          style: {
+            stroke: "#E11D48",
+            strokeWidth: 2,
+            strokeDasharray: "4 4",
+          },
+          label: "♥",
+          labelStyle: {
+            fill: "#E11D48",
+            fontWeight: 700,
+            fontSize: 12,
+          },
+        });
       }
     }
   });
 
   // B. Đường nối huyết thống trực giao dạng chữ T (Orthogonal Step Lines)
-  // Gom nhóm con theo cặp cha mẹ để đường chữ T đâm từ giữa cặp cha mẹ xuống nhánh ngang rồi rẽ nhánh thẳng đứng vào từng người con
-  const familyChildMap = new Map<string, { fatherId?: string; motherId?: string; children: Member[] }>();
+  // Đâm từ giữa cặp cha mẹ xuống nhánh ngang rồi rẽ nhánh thẳng đứng vào từng người con của CHÍNH HỌ
+  units.forEach((unit) => {
+    if (unit.children.length === 0) return;
 
-  members.forEach((m) => {
-    const fid = m.fatherId && memberMap.has(m.fatherId) ? m.fatherId : undefined;
-    const mid = m.motherId && memberMap.has(m.motherId) ? m.motherId : undefined;
-
-    if (!fid && !mid) return;
-
-    // Khóa định danh gia đình duy nhất
-    const famKey = [fid || "none", mid || "none"].sort().join("---");
-    if (!familyChildMap.has(famKey)) {
-      familyChildMap.set(famKey, { fatherId: fid, motherId: mid, children: [] });
-    }
-    familyChildMap.get(famKey)!.children.push(m);
-  });
-
-  // Tạo các đường nối huyết thống trực giao từ giữa cha mẹ xuống từng con
-  familyChildMap.forEach(({ fatherId, motherId, children }) => {
-    const parentPrimaryId = fatherId || motherId!;
-    const fPos = fatherId ? nodePositions.get(fatherId) : null;
-    const mPos = motherId ? nodePositions.get(motherId) : null;
-
-    let startX: number;
-    let startY: number;
-
-    if (fPos && mPos) {
-      // Đâm từ GIỮA cặp cha mẹ: tâm giữa 2 thẻ của bố và mẹ
-      startX = (fPos.x + mPos.x + NODE_WIDTH) / 2;
-      startY = Math.max(fPos.y, mPos.y) + NODE_HEIGHT;
-    } else {
-      const pPos = fPos || mPos!;
-      startX = pPos.x + NODE_WIDTH / 2;
-      startY = pPos.y + NODE_HEIGHT;
-    }
+    // Tọa độ xuất phát:
+    // Nếu có cả cha và mẹ: đâm từ chính giữa khoảng hở giữa 2 thẻ
+    // Nếu chỉ có đơn thân: đâm từ chính giữa đáy thẻ
+    const startX = unit.spouse
+      ? unit.x + NODE_WIDTH + SPOUSE_GAP / 2
+      : unit.x + NODE_WIDTH / 2;
+    const startY = unit.y + NODE_HEIGHT;
 
     // Nhánh ngang (branch level Y) nằm ở vị trí 50% khoảng cách giữa 2 đời
-    const childGen = children[0].generation || 2;
-    const childLevelY = BASE_Y + (childGen - 1) * LEVEL_HEIGHT;
-    const branchY = startY + (childLevelY - startY) / 2;
+    const branchY = startY + (LEVEL_HEIGHT - NODE_HEIGHT) / 2;
 
-    children.forEach((child) => {
+    unit.children.forEach((childUnit) => {
+      const child = childUnit.primary;
       edges.push({
-        id: `edge-lineage-${parentPrimaryId}-${child.id}`,
-        source: parentPrimaryId,
+        id: `edge-lineage-${unit.primary.id}-${child.id}`,
+        source: unit.primary.id,
         target: child.id,
         type: "orthogonalBloodline",
         data: {
