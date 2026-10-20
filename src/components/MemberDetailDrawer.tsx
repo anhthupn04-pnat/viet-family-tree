@@ -186,14 +186,23 @@ export default function MemberDetailDrawer({
                   <span className="text-stone-400">Chưa rõ</span>
                 )}
               </p>
-              {member.spouses && member.spouses.length > 0 && (
-                <p>
-                  <strong>Hôn phối (Vợ / Chồng):</strong>{" "}
-                  <span className="text-[#8B1E1E] font-semibold">
-                    {member.spouses.map((s: any) => s.fullName).join(", ")}
-                  </span>
-                </p>
-              )}
+              {(() => {
+                const spouseNames = [
+                  ...(member.spouses || []).map((s: any) => s.fullName),
+                  ...(member.husbandMarriages || []).map((m: any) => m.wife?.fullName),
+                  ...(member.wifeMarriages || []).map((m: any) => m.husband?.fullName),
+                ].filter(Boolean);
+                const uniqueNames = Array.from(new Set(spouseNames));
+                if (uniqueNames.length === 0) return null;
+                return (
+                  <p>
+                    <strong>Hôn phối (Vợ / Chồng):</strong>{" "}
+                    <span className="text-[#8B1E1E] font-semibold">
+                      {uniqueNames.join(", ")}
+                    </span>
+                  </p>
+                );
+              })()}
             </div>
           </div>
 

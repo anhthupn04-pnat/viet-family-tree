@@ -86,6 +86,7 @@ interface FamilyTreeCanvasProps {
   focusedMemberId?: string | null;
   isAdmin: boolean;
   clanName?: string;
+  refreshKey?: number;
 }
 
 // Stylized Golden Royal Dragon (Rồng Vàng Hoàng Kim chầu phụng)
@@ -144,6 +145,7 @@ export default function FamilyTreeCanvas({
   focusedMemberId,
   isAdmin,
   clanName = "Gia phả dòng họ",
+  refreshKey,
 }: FamilyTreeCanvasProps) {
   const [members, setMembers] = useState<MemberNode[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
@@ -226,7 +228,7 @@ export default function FamilyTreeCanvas({
 
   useEffect(() => {
     loadTree();
-  }, [selectedBranch]);
+  }, [selectedBranch, refreshKey]);
 
   // Focus on member when requested from Header search
   useEffect(() => {

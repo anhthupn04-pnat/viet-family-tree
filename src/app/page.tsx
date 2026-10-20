@@ -77,6 +77,7 @@ export default function HomePage() {
   const [kinshipPreselectedA, setKinshipPreselectedA] = useState<string | undefined>();
   const [kinshipPreselectedB, setKinshipPreselectedB] = useState<string | undefined>();
   const [focusedMemberId, setFocusedMemberId] = useState<string | null>(null);
+  const [treeRefreshKey, setTreeRefreshKey] = useState<number>(0);
 
   // Toast notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -99,6 +100,15 @@ export default function HomePage() {
     setTimeout(() => {
       setToastMessage(null);
     }, 5000);
+  };
+
+  // Refresh all application data (tree canvas, member list, branches, pending count)
+  const refreshAllData = () => {
+    setTreeRefreshKey((prev) => prev + 1);
+    fetchClanData();
+    fetchBranches();
+    fetchMembersList();
+    fetchPendingCount();
   };
 
   // Fetch initial clan data & branches
@@ -216,10 +226,7 @@ export default function HomePage() {
       }
       showToast(data.message || "Đã xóa thành công.");
       setSelectedMember(null);
-      fetchClanData();
-      fetchBranches();
-      fetchMembersList();
-      fetchPendingCount();
+      refreshAllData();
     } catch (err: any) {
       alert(err.message || "Lỗi khi xóa thành viên.");
     }
@@ -389,6 +396,7 @@ export default function HomePage() {
               focusedMemberId={focusedMemberId}
               isAdmin={isAdmin}
               clanName={clan?.name || "Gia phả dòng họ"}
+              refreshKey={treeRefreshKey}
             />
           </div>
         )}
@@ -412,6 +420,7 @@ export default function HomePage() {
             }}
             isAdmin={isAdmin}
             branches={branches}
+            refreshKey={treeRefreshKey}
           />
         )}
 
@@ -424,6 +433,7 @@ export default function HomePage() {
               setEditingMember(null);
               setShowMemberFormModal(true);
             }}
+            onMemberApproved={refreshAllData}
           />
         )}
       </main>
@@ -510,10 +520,7 @@ export default function HomePage() {
         onSuccess={(msg) => {
           setShowMemberFormModal(false);
           setEditingMember(null);
-          fetchClanData();
-          fetchBranches();
-          fetchMembersList();
-          fetchPendingCount();
+          refreshAllData();
           if (msg) {
             showToast(msg);
           } else if (!isAdmin) {

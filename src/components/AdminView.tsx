@@ -24,6 +24,7 @@ interface AdminViewProps {
   onNavigateTab: (tab: string) => void;
   onOpenCreateBranch: () => void;
   onOpenAddMember: () => void;
+  onMemberApproved?: () => void;
 }
 
 interface ChangeRequest {
@@ -54,6 +55,7 @@ export default function AdminView({
   onNavigateTab,
   onOpenCreateBranch,
   onOpenAddMember,
+  onMemberApproved,
 }: AdminViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<"pendingMembers" | "requests" | "audit" | "overview">("pendingMembers");
   const [requests, setRequests] = useState<ChangeRequest[]>([]);
@@ -127,6 +129,7 @@ export default function AdminView({
       if (res.ok) {
         fetchPendingMembers();
         fetchAuditLogs();
+        onMemberApproved?.();
       }
     } catch (e) {
       console.error(e);
@@ -147,6 +150,7 @@ export default function AdminView({
       if (res.ok) {
         fetchRequests();
         fetchAuditLogs();
+        onMemberApproved?.();
       }
     } catch (e) {
       console.error(e);

@@ -22,6 +22,7 @@ interface MemberListViewProps {
   onKinshipSearch: (memberId: string) => void;
   isAdmin: boolean;
   branches: any[];
+  refreshKey?: number;
 }
 
 export default function MemberListView({
@@ -32,6 +33,7 @@ export default function MemberListView({
   onKinshipSearch,
   isAdmin,
   branches,
+  refreshKey,
 }: MemberListViewProps) {
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,7 +69,7 @@ export default function MemberListView({
 
   useEffect(() => {
     fetchMembers();
-  }, [branchId, generation, gender, isAlive]);
+  }, [branchId, generation, gender, isAlive, refreshKey]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -202,11 +204,23 @@ export default function MemberListView({
                             {m.fullName.charAt(0)}
                           </div>
                           <div>
-                            <span className="font-serif font-bold text-stone-900 group-hover:text-[#8B1E1E] transition-colors block">
-                              {m.fullName}
-                            </span>
+                            <div className="flex items-center space-x-1.5 flex-wrap">
+                              <span className="font-serif font-bold text-stone-900 group-hover:text-[#8B1E1E] transition-colors">
+                                {m.fullName}
+                              </span>
+                              {m.birthOrder && (
+                                <span className="bg-amber-100 text-amber-800 text-[9px] font-semibold px-1.5 py-0.2 rounded border border-amber-200">
+                                  {m.birthOrder}
+                                </span>
+                              )}
+                              {m.isMartyr && (
+                                <span className="bg-red-600 text-white text-[9px] font-bold px-1.5 py-0.2 rounded shadow-2xs">
+                                  ⭐ Liệt Sĩ
+                                </span>
+                              )}
+                            </div>
                             <span className="text-[10px] text-stone-400 italic">
-                              {m.courtesyName || (isMale ? "Nam" : "Nữ")}
+                              {m.courtesyName || (isMale ? "Nam giới" : "Nữ giới")}
                             </span>
                           </div>
                         </div>

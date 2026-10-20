@@ -13,6 +13,26 @@ interface MemberFormModalProps {
   isAdmin?: boolean;
 }
 
+const BIRTH_ORDER_PRESETS = [
+  "Khởi tổ",
+  "Con trưởng",
+  "Con thứ 2",
+  "Con thứ 3",
+  "Con thứ 4",
+  "Con thứ 5",
+  "Con út",
+  "Con gái trưởng",
+  "Con gái thứ 2",
+  "Con gái thứ 3",
+  "Con gái út",
+  "Dâu trưởng",
+  "Dâu thứ",
+  "Rể quý",
+  "Cháu đích tôn",
+  "Cháu nội",
+  "Cháu ngoại",
+];
+
 export default function MemberFormModal({
   isOpen,
   onClose,
@@ -26,6 +46,8 @@ export default function MemberFormModal({
   const [courtesyName, setCourtesyName] = useState("");
   const [gender, setGender] = useState("MALE");
   const [generation, setGeneration] = useState(5);
+  const [birthOrder, setBirthOrder] = useState("");
+  const [isMartyr, setIsMartyr] = useState(false);
   const [branchId, setBranchId] = useState("");
   const [fatherId, setFatherId] = useState("");
   const [motherId, setMotherId] = useState("");
@@ -53,9 +75,20 @@ export default function MemberFormModal({
       setCourtesyName(editingMember.courtesyName || "");
       setGender(editingMember.gender || "MALE");
       setGeneration(editingMember.generation || 1);
+      setBirthOrder(editingMember.birthOrder || "");
+      setIsMartyr(Boolean(editingMember.isMartyr));
       setBranchId(editingMember.branchId || "");
       setFatherId(editingMember.fatherId || "");
       setMotherId(editingMember.motherId || "");
+
+      const currentSpouseId =
+        editingMember.spouseId ||
+        editingMember.spouses?.[0]?.id ||
+        editingMember.husbandMarriages?.[0]?.wife?.id ||
+        editingMember.wifeMarriages?.[0]?.husband?.id ||
+        "";
+      setSpouseId(currentSpouseId);
+
       setBirthSolar(editingMember.birthSolar || "");
       setBirthLunar(editingMember.birthLunar || "");
       setDeathSolar(editingMember.deathSolar || "");
@@ -73,6 +106,8 @@ export default function MemberFormModal({
       setCourtesyName("");
       setGender("MALE");
       setGeneration(5);
+      setBirthOrder("");
+      setIsMartyr(false);
       setBranchId(branches.length > 0 ? branches[0].id : "");
       setFatherId("");
       setMotherId("");
@@ -111,6 +146,8 @@ export default function MemberFormModal({
         courtesyName,
         gender,
         generation: Number(generation),
+        birthOrder: birthOrder?.trim() || null,
+        isMartyr,
         branchId: branchId || null,
         fatherId: fatherId || null,
         motherId: motherId || null,
@@ -143,7 +180,7 @@ export default function MemberFormModal({
       }
 
       const successMsg = isAdmin
-        ? "Đã lưu hồ sơ thành viên thành công!"
+        ? (editingMember ? "Cập nhật hồ sơ thành công!" : "Đã lưu hồ sơ thành viên mới thành công!")
         : "Yêu cầu của bạn đã được gửi tới Quản trị viên và đang chờ duyệt.";
 
       onSuccess(successMsg);
@@ -161,6 +198,9 @@ export default function MemberFormModal({
   );
   const potentialMothers = allMembers.filter(
     (m) => m.gender === "FEMALE" && (!editingMember || m.id !== editingMember.id)
+  );
+  const potentialSpouses = allMembers.filter(
+    (m) => (!editingMember || m.id !== editingMember.id) && m.gender !== gender
   );
 
   return (
@@ -225,8 +265,8 @@ export default function MemberFormModal({
             </div>
           </div>
 
-          {/* Hàng 2: Giới tính, Đời thứ, Chi họ */}
-          <div className="grid grid-cols-3 gap-3">
+          {/* Hàng 2: Giới tính, Đời thứ, Chi họ, Thứ bậc */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
               <label className="block text-xs font-semibold text-stone-700 mb-1">
                 Giới tính
@@ -273,10 +313,28 @@ export default function MemberFormModal({
                 ))}
               </select>
             </div>
+            <div>
+              <label className="block text-xs font-semibold text-stone-700 mb-1">
+                Thứ bậc trong gia đình
+              </label>
+              <input
+                type="text"
+                list="birth-order-list"
+                value={birthOrder}
+                onChange={(e) => setBirthOrder(e.target.value)}
+                placeholder="Ví dụ: Con trưởng, Con thứ 2..."
+                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#8B1E1E]"
+              />
+              <datalist id="birth-order-list">
+                {BIRTH_ORDER_PRESETS.map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
+            </div>
           </div>
 
-          {/* Hàng 3: Huyết thống (Cha ruột & Mẹ ruột) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 bg-stone-50 rounded-xl border border-stone-200">
+          {/* Hàng 3: Huyết thống & Hôn phối (Cha ruột, Mẹ ruột & Vợ/Chồng) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-stone-50 rounded-xl border border-stone-200">
             <div>
               <label className="block text-xs font-semibold text-blue-900 mb-1">
                 Thân phụ (Cha ruột)
@@ -307,6 +365,23 @@ export default function MemberFormModal({
                 {potentialMothers.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.fullName} (Đời {m.generation})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-emerald-900 mb-1">
+                {gender === "MALE" ? "Phối ngẫu (Hiền thê / Vợ)" : "Phối ngẫu (Phu quân / Chồng)"}
+              </label>
+              <select
+                value={spouseId}
+                onChange={(e) => setSpouseId(e.target.value)}
+                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#8B1E1E]"
+              >
+                <option value="">-- Chưa kết hôn / Chưa rõ --</option>
+                {potentialSpouses.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.fullName} (Đời {s.generation}{s.memberCode ? ` - ${s.memberCode}` : ""})
                   </option>
                 ))}
               </select>
@@ -365,18 +440,33 @@ export default function MemberFormModal({
             </div>
           </div>
 
-          {/* Trạng thái còn sống toggle */}
-          <div className="flex items-center space-x-3 p-2 bg-stone-50 rounded-lg border border-stone-200">
-            <input
-              type="checkbox"
-              id="alive-toggle"
-              checked={isAlive}
-              onChange={(e) => setIsAlive(e.target.checked)}
-              className="w-4 h-4 text-[#8B1E1E] accent-[#8B1E1E] rounded cursor-pointer"
-            />
-            <label htmlFor="alive-toggle" className="text-xs font-semibold text-stone-800 cursor-pointer">
-              Thành viên hiện vẫn còn sống
-            </label>
+          {/* Trạng thái còn sống & Liệt sĩ toggle */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex items-center space-x-3 p-2.5 bg-stone-50 rounded-lg border border-stone-200">
+              <input
+                type="checkbox"
+                id="alive-toggle"
+                checked={isAlive}
+                onChange={(e) => setIsAlive(e.target.checked)}
+                className="w-4 h-4 text-[#8B1E1E] accent-[#8B1E1E] rounded cursor-pointer"
+              />
+              <label htmlFor="alive-toggle" className="text-xs font-semibold text-stone-800 cursor-pointer">
+                Thành viên hiện vẫn còn sống
+              </label>
+            </div>
+
+            <div className="flex items-center space-x-3 p-2.5 bg-red-50/60 rounded-lg border border-red-200">
+              <input
+                type="checkbox"
+                id="martyr-toggle"
+                checked={isMartyr}
+                onChange={(e) => setIsMartyr(e.target.checked)}
+                className="w-4 h-4 text-red-600 accent-red-600 rounded cursor-pointer"
+              />
+              <label htmlFor="martyr-toggle" className="text-xs font-semibold text-red-900 cursor-pointer flex items-center space-x-1.5">
+                <span>⭐ Liệt sĩ / Có công với Tổ quốc</span>
+              </label>
+            </div>
           </div>
 
           {/* Quê quán, Nơi ở, Mộ phần, SĐT */}

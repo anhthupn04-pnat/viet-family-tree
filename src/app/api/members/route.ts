@@ -87,7 +87,19 @@ export async function GET(request: Request) {
       return NextResponse.json({ members: filtered, total: filtered.length });
     }
 
-    return NextResponse.json({ members, total: members.length });
+    const formattedMembers = members.map((m: any) => {
+      const spouses = [
+        ...(m.husbandMarriages || []).map((rel: any) => ({ ...rel.wife, relation: "WIFE" })),
+        ...(m.wifeMarriages || []).map((rel: any) => ({ ...rel.husband, relation: "HUSBAND" })),
+      ];
+      return {
+        ...m,
+        spouses,
+        spouseId: spouses.length > 0 ? spouses[0].id : null,
+      };
+    });
+
+    return NextResponse.json({ members: formattedMembers, total: formattedMembers.length });
   } catch (error: any) {
     console.error("Members GET error:", error);
     const { MOCK_MEMBERS } = await import("@/lib/mockData");
@@ -128,6 +140,8 @@ export async function POST(request: Request) {
       courtesyName,
       gender = "MALE",
       generation = 1,
+      birthOrder,
+      isMartyr = false,
       birthSolar,
       birthLunar,
       deathSolar,
@@ -176,6 +190,8 @@ export async function POST(request: Request) {
         courtesyName: courtesyName?.trim() || null,
         gender,
         generation: genNum,
+        birthOrder: birthOrder?.trim() || null,
+        isMartyr: Boolean(isMartyr),
         birthSolar: birthSolar || null,
         birthLunar: birthLunar || null,
         deathSolar: deathSolar || null,
@@ -200,13 +216,22 @@ export async function POST(request: Request) {
     // Nếu có chọn vợ/chồng
     if (spouseId) {
       const isMale = gender === "MALE";
-      await prisma.marriage.create({
-        data: {
-          husbandId: isMale ? newMember.id : spouseId,
-          wifeId: isMale ? spouseId : newMember.id,
-          marriageOrder: 1,
-        },
+      const husbandId = isMale ? newMember.id : spouseId;
+      const wifeId = isMale ? spouseId : newMember.id;
+
+      const existingMarriage = await prisma.marriage.findFirst({
+        where: { husbandId, wifeId },
       });
+
+      if (!existingMarriage) {
+        await prisma.marriage.create({
+          data: {
+            husbandId,
+            wifeId,
+            marriageOrder: 1,
+          },
+        });
+      }
     }
 
     // Ghi audit log
@@ -230,7 +255,7 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     console.error("Members POST error:", error);
-    return NextResponse.json({ error: "Lỗi khi thêm thành viên mới." }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi khi thêm thành viên mới: " + (error?.message || "") }, { status: 500 });
   }
 }
 
@@ -244,6 +269,8 @@ export async function PUT(request: Request) {
       courtesyName,
       gender,
       generation,
+      birthOrder,
+      isMartyr,
       birthSolar,
       birthLunar,
       deathSolar,
@@ -252,6 +279,7 @@ export async function PUT(request: Request) {
       branchId,
       fatherId,
       motherId,
+      spouseId,
       burialPlace,
       hometown,
       currentResidence,
@@ -315,6 +343,8 @@ export async function PUT(request: Request) {
         courtesyName: courtesyName?.trim() || null,
         gender: gender || "MALE",
         generation: Number(generation) || 1,
+        birthOrder: birthOrder !== undefined ? (birthOrder?.trim() || null) : undefined,
+        isMartyr: isMartyr !== undefined ? Boolean(isMartyr) : undefined,
         birthSolar: birthSolar || null,
         birthLunar: birthLunar || null,
         deathSolar: deathSolar || null,
@@ -332,6 +362,48 @@ export async function PUT(request: Request) {
       },
     });
 
+    // Đồng bộ mối quan hệ vợ/chồng nếu có gửi spouseId
+    if (spouseId !== undefined) {
+      const memberGender = gender || updated.gender;
+      const isMale = memberGender === "MALE";
+
+      if (spouseId) {
+        const husbandId = isMale ? id : spouseId;
+        const wifeId = isMale ? spouseId : id;
+
+        // Xóa liên kết hôn nhân cũ khác với spouseId mới (nếu có)
+        await prisma.marriage.deleteMany({
+          where: {
+            OR: [
+              { husbandId: id, wifeId: { not: spouseId } },
+              { wifeId: id, husbandId: { not: spouseId } },
+            ],
+          },
+        });
+
+        const existingMarriage = await prisma.marriage.findFirst({
+          where: { husbandId, wifeId },
+        });
+
+        if (!existingMarriage) {
+          await prisma.marriage.create({
+            data: {
+              husbandId,
+              wifeId,
+              marriageOrder: 1,
+            },
+          });
+        }
+      } else {
+        // Nếu spouseId là rỗng/null, xóa liên kết hôn phối hiện tại
+        await prisma.marriage.deleteMany({
+          where: {
+            OR: [{ husbandId: id }, { wifeId: id }],
+          },
+        });
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message: "Cập nhật hồ sơ thành viên thành công!",
@@ -339,7 +411,7 @@ export async function PUT(request: Request) {
     });
   } catch (error: any) {
     console.error("Members PUT error:", error);
-    return NextResponse.json({ error: "Lỗi khi cập nhật thành viên." }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi khi cập nhật thành viên: " + (error?.message || "") }, { status: 500 });
   }
 }
 
@@ -368,6 +440,21 @@ export async function DELETE(request: Request) {
       );
     }
 
+    // Xóa các liên kết quan hệ trước để đảm bảo tính toàn vẹn khóa ngoại trong SQLite
+    await prisma.marriage.deleteMany({
+      where: {
+        OR: [{ husbandId: id }, { wifeId: id }],
+      },
+    });
+
+    await prisma.ancestorAnniversary.deleteMany({
+      where: { memberId: id },
+    });
+
+    await prisma.changeRequest.deleteMany({
+      where: { memberId: id },
+    });
+
     await prisma.memberProfile.delete({
       where: { id },
     });
@@ -378,6 +465,6 @@ export async function DELETE(request: Request) {
     });
   } catch (error: any) {
     console.error("Members DELETE error:", error);
-    return NextResponse.json({ error: "Lỗi khi xóa thành viên." }, { status: 500 });
+    return NextResponse.json({ error: "Lỗi khi xóa thành viên: " + (error?.message || "") }, { status: 500 });
   }
 }
