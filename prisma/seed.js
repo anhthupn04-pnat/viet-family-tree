@@ -62,7 +62,7 @@ async function main() {
   // 2. Tạo Dòng Họ chính
   const clan = await prisma.clan.create({
     data: {
-      name: 'Gia Phả Phan Tộc Đại Tông',
+      name: 'Gia phả dòng họ',
       couplet1: 'Tổ Tiên Công Đức Thiên Niên Thịnh',
       couplet2: 'Tử Hiếu Tôn Hiền Vạn Đại Vinh',
       originLocation: 'Nga Sơn, Thanh Hóa, Việt Nam',
