@@ -2,11 +2,12 @@
 
 import React, { useState } from "react";
 import { X, Lock, Mail, ShieldCheck, KeyRound, Sparkles } from "lucide-react";
+import { useFamilyStore } from "@/lib/family-store";
 
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLoginSuccess: (user: any) => void;
+  onLoginSuccess?: (adminUser: any) => void;
 }
 
 export default function LoginModal({
@@ -14,6 +15,7 @@ export default function LoginModal({
   onClose,
   onLoginSuccess,
 }: LoginModalProps) {
+  const { loginAdmin } = useFamilyStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -21,148 +23,143 @@ export default function LoginModal({
 
   if (!isOpen) return null;
 
-  const handleFillAdmin = () => {
+  const handleFillSuperAdmin = () => {
     setEmail("anhthuphan0102@gmail.com");
     setPassword("010204");
     setError(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleFillSubAdmin = () => {
+    setEmail("admin@tophan.vn");
+    setPassword("admin123");
+    setError(null);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password: password.trim() }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Đăng nhập thất bại.");
-      }
-
-      onLoginSuccess(data.user);
-      onClose();
-    } catch (err: any) {
-      setError(err.message || "Đã xảy ra lỗi khi đăng nhập.");
-    } finally {
+    const result = loginAdmin(email, password);
+    if (!result.success) {
+      setError(result.message || "Email hoặc mật khẩu không chính xác!");
       setLoading(false);
+      return;
     }
+
+    setLoading(false);
+    onLoginSuccess?.({ email, name: email });
+    onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-[#C59B27]/40 overflow-hidden transform transition-all">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-4 bg-gradient-to-r from-[#8B1E1E] to-[#681313] text-white flex items-center justify-between">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-400/20 border border-amber-300/40 flex items-center justify-center">
-              <ShieldCheck className="w-5 h-5 text-amber-300" />
+        <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+              <ShieldCheck className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-base font-bold font-serif text-amber-200">
+              <h3 className="text-base font-bold text-white leading-tight">
                 Đăng Nhập Quản Trị Viên
-              </h2>
-              <p className="text-[11px] text-amber-100/70">
-                Gia phả dòng họ
+              </h3>
+              <p className="text-xs text-slate-400">
+                Phan Family Tree Hub • Ban Trị Sự
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-amber-100/80 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
+            className="text-slate-400 hover:text-white p-1 rounded-full hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs">
           {error && (
-            <div className="p-3 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200">
+            <div className="p-3 bg-red-50 text-red-700 text-xs rounded-xl border border-red-200 font-medium">
               {error}
             </div>
           )}
 
-          {/* Quick preset for Admin */}
-          <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold text-amber-900 flex items-center space-x-1">
-                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                <span>Tài khoản Quản trị chỉ định:</span>
-              </p>
-              <p className="text-[11px] text-amber-800 font-mono mt-0.5">
-                anhthuphan0102@gmail.com / 010204
-              </p>
+          {/* Quick Preset Buttons for testing */}
+          <div className="bg-blue-50 border border-blue-200 p-3 rounded-xl space-y-2">
+            <p className="font-bold text-blue-900 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+              <span>Tài khoản mẫu để kiểm thử trên Vercel:</span>
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleFillSuperAdmin}
+                className="px-2.5 py-1 bg-white hover:bg-blue-100 text-blue-800 rounded-lg border border-blue-300 font-mono text-[11px] font-semibold transition-all cursor-pointer shadow-2xs"
+              >
+                Super Admin (anhthuphan0102@gmail.com)
+              </button>
+              <button
+                type="button"
+                onClick={handleFillSubAdmin}
+                className="px-2.5 py-1 bg-white hover:bg-blue-100 text-blue-800 rounded-lg border border-blue-300 font-mono text-[11px] font-semibold transition-all cursor-pointer shadow-2xs"
+              >
+                Ban Trị Sự (admin@tophan.vn)
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={handleFillAdmin}
-              className="px-2.5 py-1 bg-[#8B1E1E] hover:bg-[#721515] text-white text-[11px] font-semibold rounded-md shadow-sm transition-all"
-            >
-              Điền nhanh
-            </button>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-stone-700 mb-1">
+            <label className="block font-semibold text-slate-700 mb-1">
               Email Quản Trị
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-stone-400 absolute left-3 top-2.5" />
+              <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="email"
                 required
+                placeholder="admin@tophan.vn"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="anhthuphan0102@gmail.com"
-                className="w-full pl-9 pr-3.5 py-2 text-sm border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B1E1E]/30 focus:border-[#8B1E1E]"
+                className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-stone-700 mb-1">
+            <label className="block font-semibold text-slate-700 mb-1">
               Mật Khẩu
             </label>
             <div className="relative">
-              <KeyRound className="w-4 h-4 text-stone-400 absolute left-3 top-2.5" />
+              <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="password"
                 required
+                placeholder="Nhập mật khẩu"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Nhập mật khẩu (010204)"
-                className="w-full pl-9 pr-3.5 py-2 text-sm border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8B1E1E]/30 focus:border-[#8B1E1E]"
+                className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
 
-          <div className="pt-2 flex items-center justify-end space-x-2">
+          <div className="pt-2 flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-medium text-stone-600 hover:text-stone-800 rounded-lg hover:bg-stone-100 transition-colors"
+              className="px-4 py-2 border border-slate-300 rounded-xl text-slate-600 hover:bg-slate-50 font-semibold cursor-pointer"
             >
               Hủy
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-5 py-2 bg-[#8B1E1E] hover:bg-[#721515] text-white text-xs font-semibold rounded-lg shadow-md transition-all flex items-center space-x-1.5"
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
             >
-              {loading ? (
-                <span>Đang xác thực...</span>
-              ) : (
-                <>
-                  <Lock className="w-3.5 h-3.5" />
-                  <span>Đăng Nhập</span>
-                </>
-              )}
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>{loading ? "Đang xác thực..." : "Đăng Nhập"}</span>
             </button>
           </div>
         </form>

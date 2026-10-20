@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Calendar,
   Clock,
@@ -10,366 +10,378 @@ import {
   Bell,
   CheckCircle,
   Info,
+  CalendarDays,
+  Send,
+  X,
+  ShieldCheck,
 } from "lucide-react";
-
-interface Anniversary {
-  id: string;
-  title: string;
-  lunarDay: number;
-  lunarMonth: number;
-  location?: string | null;
-  description?: string | null;
-  daysRemaining: number;
-  isToday: boolean;
-  isUpcoming: boolean;
-  member?: {
-    id: string;
-    fullName: string;
-    generation: number;
-    branch?: { branchName: string };
-  };
-}
-
-interface ClanEventItem {
-  id: string;
-  title: string;
-  category: string;
-  content: string;
-  eventDate?: string | null;
-  location?: string | null;
-}
+import { useFamilyStore } from "@/lib/family-store";
+import { lunarToSolar } from "@/utils/lunar";
+import { EventItem } from "@/types/family";
 
 interface AnniversariesViewProps {
-  isAdmin: boolean;
+  isAdmin?: boolean;
 }
 
-export default function AnniversariesView({ isAdmin }: AnniversariesViewProps) {
-  const [anniversaries, setAnniversaries] = useState<Anniversary[]>([]);
-  const [events, setEvents] = useState<ClanEventItem[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function AnniversariesView({ isAdmin = false }: AnniversariesViewProps) {
+  const { events, addEventDirect, submitChangeRequest } = useFamilyStore();
 
-  // Form states
-  const [showAddAnnModal, setShowAddAnnModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [title, setTitle] = useState("");
-  const [lunarDay, setLunarDay] = useState(1);
-  const [lunarMonth, setLunarMonth] = useState(1);
-  const [location, setLocation] = useState("Từ Đường Phan Tộc");
+  const [type, setType] = useState<"death_anniversary" | "feast" | "gathering">("death_anniversary");
+  const [lunarDay, setLunarDay] = useState(15);
+  const [lunarMonth, setLunarMonth] = useState(3);
+  const [location, setLocation] = useState("Từ Đường Tộc Phan, Quảng Nam");
   const [description, setDescription] = useState("");
-  const [submitting, setSubmitting] = useState(false);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const [resAnn, resEv] = await Promise.all([
-        fetch("/api/anniversaries"),
-        fetch("/api/events"),
-      ]);
-      const dataAnn = await resAnn.json();
-      const dataEv = await resEv.json();
-      if (dataAnn.anniversaries) setAnniversaries(dataAnn.anniversaries);
-      if (dataEv.events) setEvents(dataEv.events);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
+  // Submitter details for guests
+  const [submitterName, setSubmitterName] = useState("");
+  const [submitterPhone, setSubmitterPhone] = useState("");
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  const currentYear = new Date().getFullYear();
+
+  // Compute calculated solar dates and days remaining for events
+  const enrichedEvents = events.map((ev) => {
+    let solarDateStr = ev.solarDate;
+    let daysRemaining = 999;
+
+    if (ev.lunarDate) {
+      const parts = ev.lunarDate.split("/");
+      if (parts.length >= 2) {
+        const lDay = parseInt(parts[0], 10);
+        const lMonth = parseInt(parts[1], 10);
+        if (!isNaN(lDay) && !isNaN(lMonth)) {
+          const solar = lunarToSolar(lDay, lMonth, currentYear);
+          solarDateStr = `${solar.year}-${solar.month.toString().padStart(2, "0")}-${solar.day
+            .toString()
+            .padStart(2, "0")}`;
+
+          const targetDate = new Date(solar.year, solar.month - 1, solar.day);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const diffMs = targetDate.getTime() - today.getTime();
+          daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        }
+      }
     }
-  };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+    return {
+      ...ev,
+      calculatedSolarDate: solarDateStr,
+      daysRemaining,
+    };
+  }).sort((a, b) => a.daysRemaining - b.daysRemaining);
 
-  const handleAddAnn = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitting(true);
-    try {
-      const res = await fetch("/api/anniversaries", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          lunarDay: Number(lunarDay),
-          lunarMonth: Number(lunarMonth),
-          location,
-          description,
-        }),
+    if (!title.trim()) return;
+
+    const lunarDateStr = `${lunarDay.toString().padStart(2, "0")}/${lunarMonth.toString().padStart(2, "0")}`;
+    const solar = lunarToSolar(lunarDay, lunarMonth, currentYear);
+    const solarDateStr = `${solar.year}-${solar.month.toString().padStart(2, "0")}-${solar.day
+      .toString()
+      .padStart(2, "0")}`;
+
+    const eventPayload: Omit<EventItem, "id"> = {
+      title: title.trim(),
+      type,
+      lunarDate: lunarDateStr,
+      solarDate: solarDateStr,
+      location: location.trim(),
+      description: description.trim(),
+      status: isAdmin ? "approved" : "pending",
+    };
+
+    if (isAdmin) {
+      addEventDirect(eventPayload);
+      setToastMsg("Đã thêm sự kiện / ngày giỗ trực tiếp vào lịch tộc!");
+    } else {
+      if (!submitterName.trim() || !submitterPhone.trim()) {
+        alert("Vui lòng nhập Họ tên và Số điện thoại người gửi đề xuất!");
+        return;
+      }
+
+      submitChangeRequest({
+        actionType: "ADD_EVENT",
+        submitterName: submitterName.trim(),
+        submitterPhone: submitterPhone.trim(),
+        data: eventPayload,
       });
-      if (!res.ok) throw new Error("Không thể thêm ngày giỗ.");
-      setShowAddAnnModal(false);
-      setTitle("");
-      fetchData();
-    } catch (err: any) {
-      alert(err.message || "Lỗi khi thêm ngày giỗ.");
-    } finally {
-      setSubmitting(false);
+
+      setToastMsg(
+        "Yêu cầu của bạn đã được gửi thành công và đang đợi Ban trị sự (Admin) kiểm duyệt trước khi áp dụng lên cây phả hệ."
+      );
     }
+
+    setShowAddModal(false);
+    setTitle("");
+    setDescription("");
+    setTimeout(() => setToastMsg(null), 5000);
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Banner */}
-      <div className="bg-gradient-to-r from-[#8B1E1E] to-[#601313] rounded-2xl p-6 text-white shadow-traditional flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center space-x-2 text-amber-300 text-xs font-semibold uppercase tracking-wider mb-1">
-            <Calendar className="w-4 h-4" />
-            <span>Âm Lịch & Tế Tự Dòng Họ</span>
+    <div className="space-y-6">
+      {/* Toast */}
+      {toastMsg && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-300 text-emerald-900 rounded-xl text-xs font-semibold flex items-center justify-between shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-emerald-600" />
+            <span>{toastMsg}</span>
           </div>
-          <h2 className="text-2xl font-bold font-serif text-amber-100">
-            Lịch Giỗ Tổ Tiên & Sự Kiện Dòng Tộc
-          </h2>
-          <p className="text-amber-100/80 text-xs md:text-sm mt-1 max-w-2xl">
-            Tự động tính toán ngày giỗ theo Lịch Âm Việt Nam, hỗ trợ nhắc giỗ các cụ tiền nhân và theo dõi các ngày hội tụ, tế tự tại Từ đường.
+          <button type="button" onClick={() => setToastMsg(null)} className="text-emerald-700">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Header Banner */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <CalendarDays className="w-5 h-5 text-blue-600" />
+            <h2 className="text-xl font-bold text-slate-900">
+              Lịch Lễ Giỗ & Sự Kiện Tộc Phan
+            </h2>
+            <span className="text-xs bg-blue-100 text-blue-800 font-bold px-2.5 py-0.5 rounded-full">
+              Năm {currentYear}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500">
+            Hệ thống tự động quy đổi ngày giỗ Âm lịch của tiền nhân sang ngày Dương lịch tương ứng của
+            năm hiện tại để con cháu tiện sắp xếp công việc tề tựu.
           </p>
         </div>
 
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={() => setShowAddAnnModal(true)}
-            className="px-4 py-2.5 bg-[#C59B27] hover:bg-[#B0881F] text-[#24150B] font-bold rounded-xl text-xs md:text-sm shadow-md transition-all flex items-center space-x-2 whitespace-nowrap"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>Thêm ngày giỗ mới</span>
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setShowAddModal(true)}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer self-start md:self-auto transition-all active:scale-95"
+        >
+          <PlusCircle className="w-4 h-4" />
+          <span>{isAdmin ? "+ Thêm Lễ Giỗ / Sự Kiện" : "+ Đề Xuất Sự Kiện Mới"}</span>
+        </button>
       </div>
 
-      {/* Grid: Lịch giỗ & Sự kiện */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Cols: Danh sách ngày giỗ âm lịch */}
-        <div className="lg:col-span-2 space-y-4">
-          <h3 className="font-serif font-bold text-lg text-stone-900 flex items-center space-x-2">
-            <Sparkles className="w-5 h-5 text-[#C59B27]" />
-            <span>Lịch Giỗ Các Bậc Tiền Nhân (Sắp xếp theo ngày gần nhất)</span>
-          </h3>
+      {/* Events Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {enrichedEvents.map((ev) => {
+          const isDeath = ev.type === "death_anniversary";
+          const isFeast = ev.type === "feast";
+          const isToday = ev.daysRemaining === 0;
+          const isPast = ev.daysRemaining < 0;
 
-          {loading ? (
-            <div className="text-center py-12 text-stone-400 text-xs">
-              Đang tính toán lịch âm...
-            </div>
-          ) : anniversaries.length === 0 ? (
-            <div className="p-8 text-center bg-white rounded-2xl border border-stone-200 text-stone-500 text-xs">
-              Chưa có lịch giỗ nào được cập nhật.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {anniversaries.map((ann) => (
-                <div
-                  key={ann.id}
-                  className={`bg-white rounded-2xl border p-4 shadow-sm transition-all hover:shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
-                    ann.isToday
-                      ? "border-red-500 bg-red-50/50"
-                      : ann.isUpcoming
-                      ? "border-[#C59B27] bg-[#FAF7EE]/50"
-                      : "border-[#E8DEC7]"
-                  }`}
-                >
-                  <div className="flex items-start space-x-3.5">
-                    {/* Date Block */}
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#8B1E1E] to-[#681313] text-white flex flex-col items-center justify-center font-bold shrink-0 shadow-sm">
-                      <span className="text-xs font-serif text-amber-200">ÂM</span>
-                      <span className="text-base font-bold -mt-1">
-                        {ann.lunarDay}/{ann.lunarMonth}
-                      </span>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <h4 className="font-serif font-bold text-sm text-stone-900">
-                          {ann.title}
-                        </h4>
-                        {ann.isToday && (
-                          <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
-                            HÔM NAY
-                          </span>
-                        )}
-                        {ann.isUpcoming && !ann.isToday && (
-                          <span className="bg-amber-100 text-amber-900 text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                            Sắp tới ({ann.daysRemaining} ngày nữa)
-                          </span>
-                        )}
-                      </div>
-
-                      <p className="text-xs text-stone-500 mt-1 flex items-center space-x-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-stone-400 shrink-0" />
-                        <span>{ann.location || "Từ Đường Phan Tộc"}</span>
-                      </p>
-
-                      {ann.description && (
-                        <p className="text-[11px] text-stone-600 mt-1 line-clamp-2">
-                          {ann.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+          return (
+            <div
+              key={ev.id}
+              className={`bg-white rounded-2xl border p-5 shadow-xs transition-all flex flex-col justify-between ${
+                isToday
+                  ? "border-amber-400 bg-amber-50/30 ring-2 ring-amber-400/30"
+                  : isDeath
+                  ? "border-slate-200 hover:border-blue-300"
+                  : "border-slate-200 hover:border-emerald-300"
+              }`}
+            >
+              <div>
+                {/* Event Top Badge */}
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <span
+                    className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                      isDeath
+                        ? "bg-rose-100 text-rose-800"
+                        : isFeast
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-emerald-100 text-emerald-800"
+                    }`}
+                  >
+                    {isDeath ? "Lễ Giỗ Tiền Nhân" : isFeast ? "Hội Làng & Tiệc Tộc" : "Tảo Mộ / Họp Mặt"}
+                  </span>
 
                   {/* Countdown Badge */}
-                  <div className="shrink-0 text-right sm:self-center">
-                    <span className="text-xs font-semibold text-[#8B1E1E] bg-stone-50 border border-stone-200 px-3 py-1.5 rounded-lg inline-flex items-center space-x-1.5">
-                      <Clock className="w-3.5 h-3.5 text-[#C59B27]" />
-                      <span>
-                        {ann.isToday
-                          ? "Hôm nay chính giỗ"
-                          : `Còn ${ann.daysRemaining} ngày`}
-                      </span>
+                  {isToday ? (
+                    <span className="text-xs font-extrabold text-amber-700 bg-amber-100 px-2.5 py-0.5 rounded-full animate-pulse">
+                      Hôm Nay!
                     </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Right Col: Sự kiện & Tin tức dòng họ */}
-        <div className="space-y-4">
-          <h3 className="font-serif font-bold text-lg text-stone-900 flex items-center space-x-2">
-            <Bell className="w-5 h-5 text-[#8B1E1E]" />
-            <span>Sự Kiện & Tin Tức Dòng Họ</span>
-          </h3>
-
-          <div className="space-y-3">
-            {events.map((ev) => (
-              <div
-                key={ev.id}
-                className="bg-white rounded-2xl border border-[#E8DEC7] p-4 shadow-sm hover:shadow-md transition-all space-y-2"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="bg-[#8B1E1E]/10 text-[#8B1E1E] font-bold text-[10px] px-2 py-0.5 rounded">
-                    {ev.category === "MEETING"
-                      ? "HỌP MẶT"
-                      : ev.category === "CEREMONY"
-                      ? "LỄ TẾ TỰ"
-                      : "THÔNG BÁO"}
-                  </span>
-                  {ev.eventDate && (
-                    <span className="text-[10px] text-stone-400">
-                      {new Date(ev.eventDate).toLocaleDateString("vi-VN")}
+                  ) : isPast ? (
+                    <span className="text-[11px] text-slate-400">Đã diễn ra</span>
+                  ) : (
+                    <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full">
+                      Còn {ev.daysRemaining} ngày
                     </span>
                   )}
                 </div>
 
-                <h4 className="font-serif font-bold text-sm text-stone-900">
-                  {ev.title}
-                </h4>
+                <h3 className="font-bold text-slate-900 text-base mb-2">{ev.title}</h3>
 
-                <p className="text-xs text-stone-600 line-clamp-3 leading-relaxed">
-                  {ev.content}
-                </p>
+                {/* Dates display: Lunar vs Solar */}
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 mb-3 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Ngày Âm lịch truyền thống:</span>
+                    <span className="font-bold text-blue-800 font-mono text-xs">
+                      {ev.lunarDate ? `${ev.lunarDate} Âm lịch` : "Chưa rõ"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Ngày Dương lịch năm {currentYear}:</span>
+                    <span className="font-bold text-slate-900 font-mono text-xs">
+                      {ev.calculatedSolarDate}
+                    </span>
+                  </div>
+                </div>
 
                 {ev.location && (
-                  <p className="text-[11px] text-stone-400 flex items-center space-x-1 pt-1 border-t border-stone-100">
-                    <MapPin className="w-3 h-3" />
+                  <p className="text-xs text-slate-600 flex items-center gap-1.5 mb-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
                     <span>{ev.location}</span>
                   </p>
                 )}
+
+                {ev.description && (
+                  <p className="text-xs text-slate-500 leading-relaxed italic">{ev.description}</p>
+                )}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Modal Thêm Ngày Giỗ */}
-      {showAddAnnModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-[#C59B27]/40 overflow-hidden">
-            <div className="px-6 py-4 bg-gradient-to-r from-[#FAF7EE] to-white border-b border-[#EFE8D8] flex items-center justify-between">
-              <h3 className="font-serif font-bold text-base text-[#8B1E1E] flex items-center space-x-2">
-                <Calendar className="w-4 h-4 text-[#C59B27]" />
-                <span>Thêm Ngày Giỗ Mới</span>
-              </h3>
+      {/* Add / Propose Event Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden">
+            <div className="px-5 py-4 bg-blue-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-white" />
+                <h3 className="font-bold text-sm">
+                  {isAdmin ? "Thêm Ngày Giỗ / Sự Kiện Mới" : "Đề Xuất Sự Kiện Lễ Giỗ Mới"}
+                </h3>
+              </div>
               <button
                 type="button"
-                onClick={() => setShowAddAnnModal(false)}
-                className="text-stone-400 hover:text-stone-700"
+                onClick={() => setShowAddModal(false)}
+                className="text-white/80 hover:text-white"
               >
-                ✕
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleAddAnn} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-5 space-y-3.5 text-xs">
+              {!isAdmin && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-2.5">
+                  <span className="font-bold text-blue-900 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-blue-600" />
+                    <span>Thông tin người gửi đề xuất:</span>
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Họ và tên bạn *"
+                      value={submitterName}
+                      onChange={(e) => setSubmitterName(e.target.value)}
+                      className="px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white"
+                    />
+                    <input
+                      type="text"
+                      required
+                      placeholder="Số điện thoại *"
+                      value={submitterPhone}
+                      onChange={(e) => setSubmitterPhone(e.target.value)}
+                      className="px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Tên Lễ Giỗ <span className="text-red-500">*</span>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Tiêu đề sự kiện / Ngày giỗ *
                 </label>
                 <input
                   type="text"
                   required
+                  placeholder="Ví dụ: Lễ Giỗ Tiền Nhân Khởi Tổ Phan Thạnh"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Ví dụ: Giỗ Cụ Phan Văn..."
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8B1E1E]"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Loại sự kiện</label>
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value as any)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="death_anniversary">Lễ Giỗ Tiền Nhân (Âm lịch)</option>
+                  <option value="feast">Tiệc Tộc & Họp Mặt Đầu Xuân</option>
+                  <option value="gathering">Tảo Mộ Thanh Minh</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-stone-700 mb-1">
-                    Ngày Âm (1 - 30)
-                  </label>
+                  <label className="block font-semibold text-slate-700 mb-1">Ngày Âm lịch</label>
                   <input
                     type="number"
                     min={1}
                     max={30}
                     value={lunarDay}
                     onChange={(e) => setLunarDay(Number(e.target.value))}
-                    className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-stone-700 mb-1">
-                    Tháng Âm (1 - 12)
-                  </label>
+                  <label className="block font-semibold text-slate-700 mb-1">Tháng Âm lịch</label>
                   <input
                     type="number"
                     min={1}
                     max={12}
                     value={lunarMonth}
                     onChange={(e) => setLunarMonth(Number(e.target.value))}
-                    className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Địa Điểm Tổ Chức
-                </label>
+                <label className="block font-semibold text-slate-700 mb-1">Địa điểm tổ chức</label>
                 <input
                   type="text"
+                  placeholder="Từ Đường Tộc Phan, Quảng Nam"
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
-                  placeholder="Từ Đường Phan Tộc..."
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Ghi Chú Nghi Lễ
-                </label>
+                <label className="block font-semibold text-slate-700 mb-1">Mô tả / Lưu ý</label>
                 <textarea
                   rows={2}
+                  placeholder="Thời gian làm lễ, đóng góp phẩm vật..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Lễ cúng hoa quả, mâm cỗ mặn..."
-                  className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg"
-                />
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                ></textarea>
               </div>
 
-              <div className="pt-2 flex justify-end space-x-2">
+              <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowAddAnnModal(false)}
-                  className="px-4 py-2 text-xs text-stone-600 rounded-lg hover:bg-stone-100"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-3.5 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 font-medium cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting}
-                  className="px-5 py-2 bg-[#8B1E1E] hover:bg-[#721515] text-white text-xs font-semibold rounded-lg shadow-md"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
                 >
-                  {submitting ? "Đang lưu..." : "Lưu ngày giỗ"}
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{isAdmin ? "Thêm Trực Tiếp" : "Gửi Đề Xuất Phê Duyệt"}</span>
                 </button>
               </div>
             </form>

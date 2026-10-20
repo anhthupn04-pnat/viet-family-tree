@@ -10,6 +10,11 @@ import {
   Sparkles,
   Heart,
   Baby,
+  Phone,
+  MapPin,
+  Send,
+  ShieldCheck,
+  Info,
 } from "lucide-react";
 import { Member } from "@/types/family";
 import { useFamilyStore } from "@/lib/family-store";
@@ -24,6 +29,7 @@ interface MemberFormModalProps {
   onClose: () => void;
   editingMember?: Member | null;
   quickContext?: QuickContext | null;
+  onShowToast?: (msg: string) => void;
 }
 
 export default function MemberFormModal({
@@ -31,8 +37,15 @@ export default function MemberFormModal({
   onClose,
   editingMember,
   quickContext,
+  onShowToast,
 }: MemberFormModalProps) {
-  const { members, addMember, updateMember } = useFamilyStore();
+  const {
+    members,
+    addMemberDirect,
+    updateMemberDirect,
+    submitChangeRequest,
+    isAdmin,
+  } = useFamilyStore();
 
   const [fullName, setFullName] = useState("");
   const [nickname, setNickname] = useState("");
@@ -42,10 +55,17 @@ export default function MemberFormModal({
   const [birthDate, setBirthDate] = useState("");
   const [deathDate, setDeathDate] = useState("");
   const [isAlive, setIsAlive] = useState(true);
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
   const [fatherId, setFatherId] = useState("");
   const [motherId, setMotherId] = useState("");
   const [spouseId, setSpouseId] = useState("");
   const [notes, setNotes] = useState("");
+
+  // Submitter details for guests
+  const [submitterName, setSubmitterName] = useState("");
+  const [submitterPhone, setSubmitterPhone] = useState("");
+
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -60,6 +80,8 @@ export default function MemberFormModal({
       setBirthDate(editingMember.birthDate || "");
       setDeathDate(editingMember.deathDate || "");
       setIsAlive(editingMember.isAlive !== undefined ? editingMember.isAlive : true);
+      setPhone(editingMember.phone || "");
+      setAddress(editingMember.address || "");
       setFatherId(editingMember.fatherId || "");
       setMotherId(editingMember.motherId || "");
       setSpouseId(editingMember.spouseId || "");
@@ -71,6 +93,8 @@ export default function MemberFormModal({
       setBirthDate("");
       setDeathDate("");
       setIsAlive(true);
+      setPhone("");
+      setAddress(target.address || "");
       setNotes("");
 
       if (quickContext.type === "child") {
@@ -84,7 +108,6 @@ export default function MemberFormModal({
           setFatherId(target.spouseId || "");
         }
         setSpouseId("");
-        // Tự động tính số thứ tự con tiếp theo
         const existingChildren = members.filter(
           (m) => m.fatherId === target.id || m.motherId === target.id
         );
@@ -98,7 +121,6 @@ export default function MemberFormModal({
         setOrderInFamily("");
       }
     } else {
-      // Default new
       setFullName("");
       setNickname("");
       setGender("male");
@@ -107,6 +129,8 @@ export default function MemberFormModal({
       setBirthDate("");
       setDeathDate("");
       setIsAlive(true);
+      setPhone("");
+      setAddress("");
       setFatherId("");
       setMotherId("");
       setSpouseId("");
@@ -119,254 +143,370 @@ export default function MemberFormModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim()) {
-      setError("Họ và tên là bắt buộc.");
+      setError("Họ và tên không được để trống!");
       return;
     }
 
-    const payload = {
+    const memberPayload = {
       fullName: fullName.trim(),
       nickname: nickname.trim() || undefined,
       gender,
-      generation: Number(generation) || 1,
+      generation: Number(generation),
       orderInFamily: orderInFamily !== "" ? Number(orderInFamily) : undefined,
       birthDate: birthDate.trim() || undefined,
       deathDate: !isAlive && deathDate.trim() ? deathDate.trim() : undefined,
       isAlive,
+      phone: phone.trim() || undefined,
+      address: address.trim() || undefined,
       fatherId: fatherId || undefined,
       motherId: motherId || undefined,
       spouseId: spouseId || undefined,
       notes: notes.trim() || undefined,
     };
 
-    if (editingMember) {
-      updateMember(editingMember.id, payload);
+    if (isAdmin) {
+      // Admin Direct Mode
+      if (editingMember) {
+        updateMemberDirect(editingMember.id, memberPayload);
+        onShowToast?.(`Đã cập nhật trực tiếp thành viên "${fullName.trim()}"!`);
+      } else {
+        addMemberDirect(memberPayload);
+        onShowToast?.(`Đã thêm trực tiếp thành viên "${fullName.trim()}" vào phả hệ!`);
+      }
     } else {
-      addMember(payload);
+      // Guest Proposal Mode
+      if (!submitterName.trim() || !submitterPhone.trim()) {
+        setError("Vui lòng nhập Họ tên và Số điện thoại người gửi đề xuất!");
+        return;
+      }
+
+      if (editingMember) {
+        submitChangeRequest({
+          actionType: "UPDATE",
+          targetMemberId: editingMember.id,
+          submitterName: submitterName.trim(),
+          submitterPhone: submitterPhone.trim(),
+          oldData: { ...editingMember },
+          data: { ...memberPayload, id: editingMember.id },
+        });
+      } else {
+        submitChangeRequest({
+          actionType: "CREATE",
+          submitterName: submitterName.trim(),
+          submitterPhone: submitterPhone.trim(),
+          data: memberPayload,
+        });
+      }
+
+      onShowToast?.(
+        "Yêu cầu của bạn đã được gửi thành công và đang đợi Ban trị sự (Admin) kiểm duyệt trước khi áp dụng lên cây phả hệ."
+      );
     }
 
     onClose();
   };
 
-  const maleMembers = members.filter(
-    (m) => m.gender === "male" && (!editingMember || m.id !== editingMember.id)
-  );
-  const femaleMembers = members.filter(
-    (m) => m.gender === "female" && (!editingMember || m.id !== editingMember.id)
-  );
+  const potentialFathers = members.filter((m) => m.gender === "male");
+  const potentialMothers = members.filter((m) => m.gender === "female");
   const potentialSpouses = members.filter(
-    (m) =>
-      (!editingMember || m.id !== editingMember.id) &&
-      m.gender !== gender &&
-      m.generation === Number(generation)
+    (m) => (!editingMember || m.id !== editingMember.id) && m.gender !== gender
   );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
-      <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <UserPlus className="w-5 h-5 text-blue-400" />
-            <h3 className="font-bold text-base">
-              {editingMember
-                ? "Chỉnh Sửa Hồ Sơ Thành Viên"
-                : "Thêm Thành Viên Vào Gia Phả"}
-            </h3>
+        <div
+          className={`px-6 py-4 text-white flex items-center justify-between shrink-0 ${
+            isAdmin ? "bg-slate-900" : "bg-blue-600"
+          }`}
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+              {editingMember ? (
+                <Save className="w-4 h-4 text-white" />
+              ) : quickContext?.type === "spouse" ? (
+                <Heart className="w-4 h-4 text-white" />
+              ) : quickContext?.type === "child" ? (
+                <Baby className="w-4 h-4 text-white" />
+              ) : (
+                <UserPlus className="w-4 h-4 text-white" />
+              )}
+            </div>
+            <div>
+              <h3 className="font-bold text-base leading-tight">
+                {isAdmin
+                  ? editingMember
+                    ? "Chỉnh Sửa Hồ Sơ (Trực Tiếp)"
+                    : "Thêm Thành Viên Mới (Trực Tiếp)"
+                  : editingMember
+                  ? "Đề Xuất Cập Nhật Hồ Sơ Thành Viên"
+                  : "Đề Xuất Thêm Thành Viên Mới"}
+              </h3>
+              <p className="text-xs text-white/80">
+                {isAdmin
+                  ? "Quyền Quản Trị Viên: Áp dụng ngay lập tức"
+                  : "Dành cho khách: Đóng góp gửi về Ban trị sự kiểm duyệt"}
+              </p>
+            </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-1 rounded-full hover:bg-slate-800 transition-colors cursor-pointer"
+            className="text-white/80 hover:text-white p-1 rounded-full hover:bg-white/10 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Quick Context Banner */}
-        {quickContext && (
-          <div className="px-6 py-2.5 bg-blue-50 border-b border-blue-100 flex items-center gap-2 text-xs text-blue-800 font-medium">
-            {quickContext.type === "child" ? (
-              <>
-                <Baby className="w-4 h-4 text-blue-600 shrink-0" />
-                <span>
-                  Đang thêm <strong>Con</strong> cho{" "}
-                  <strong>{quickContext.targetMember.fullName}</strong> &bull; Thế
-                  hệ Đời {quickContext.targetMember.generation + 1}
-                </span>
-              </>
-            ) : (
-              <>
-                <Heart className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>
-                  Đang thêm <strong>Vợ/Chồng</strong> cho{" "}
-                  <strong>{quickContext.targetMember.fullName}</strong> &bull; Đời{" "}
-                  {quickContext.targetMember.generation}
-                </span>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4 text-xs">
+        {/* Scrollable Form Body */}
+        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 text-xs">
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-              ⚠️ {error}
+            <div className="p-3 bg-red-50 text-red-700 rounded-xl border border-red-200 flex items-center gap-2">
+              <span className="font-bold">Lỗi:</span>
+              <span>{error}</span>
             </div>
           )}
 
-          {/* Họ và tên & Biệt danh */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Họ và tên <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Ví dụ: Phan Văn Thứ 1"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs font-semibold"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Biệt danh / Tên thường gọi
-              </label>
-              <input
-                type="text"
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                placeholder='Ví dụ: "Bác Cả", "Út"'
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs italic"
-              />
-            </div>
-          </div>
-
-          {/* Giới tính, Đời thứ, Thứ tự con */}
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Giới tính
-              </label>
-              <select
-                value={gender}
-                onChange={(e) => setGender(e.target.value as any)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-              >
-                <option value="male">Nam</option>
-                <option value="female">Nữ</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Đời thứ (Generation)
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={20}
-                value={generation}
-                onChange={(e) => setGeneration(Number(e.target.value))}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Thứ tự con (1..9)
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={30}
-                value={orderInFamily}
-                onChange={(e) =>
-                  setOrderInFamily(e.target.value ? Number(e.target.value) : "")
-                }
-                placeholder="1, 2, 3..."
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-              />
-            </div>
-          </div>
-
-          {/* Ngày sinh, tình trạng, ngày mất */}
-          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-slate-700">Tình trạng</span>
-              <div className="flex items-center gap-4">
-                <label className="inline-flex items-center gap-1.5 cursor-pointer">
+          {/* Submitter details for guests */}
+          {!isAdmin && (
+            <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl space-y-3">
+              <div className="flex items-center gap-2 text-blue-900 font-bold">
+                <ShieldCheck className="w-4 h-4 text-blue-600" />
+                <span>Thông tin người gửi đề xuất (Bắt buộc)</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Họ và tên bạn *
+                  </label>
                   <input
-                    type="radio"
-                    name="isAlive"
-                    checked={isAlive}
-                    onChange={() => setIsAlive(true)}
-                    className="text-emerald-600"
+                    type="text"
+                    required
+                    placeholder="Ví dụ: Phan Văn An"
+                    value={submitterName}
+                    onChange={(e) => setSubmitterName(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <span className="font-semibold text-emerald-700">Đang sống</span>
-                </label>
-                <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Số điện thoại liên hệ *
+                  </label>
                   <input
-                    type="radio"
-                    name="isAlive"
-                    checked={!isAlive}
-                    onChange={() => setIsAlive(false)}
-                    className="text-slate-600"
+                    type="text"
+                    required
+                    placeholder="Ví dụ: 0912345678"
+                    value={submitterPhone}
+                    onChange={(e) => setSubmitterPhone(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <span className="font-semibold text-slate-700">Đã mất</span>
-                </label>
+                </div>
               </div>
             </div>
+          )}
+
+          {/* Section 1: Thông tin cơ bản */}
+          <div className="space-y-3">
+            <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] border-b pb-1">
+              1. Thông Tin Cá Nhân
+            </h4>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Họ và tên *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Phan Văn Bình"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Biệt danh / Tên tự
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ví dụ: Bác Hai, Chú Ba..."
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Giới tính
+                </label>
+                <select
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value as "male" | "female")}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="male">Nam</option>
+                  <option value="female">Nữ</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Thế hệ (Đời thứ)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={generation}
+                  onChange={(e) => setGeneration(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Thứ tự con trong nhà
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  placeholder="1, 2... 9"
+                  value={orderInFamily}
+                  onChange={(e) =>
+                    setOrderInFamily(e.target.value ? Number(e.target.value) : "")
+                  }
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Sinh - Tử */}
+          <div className="space-y-3">
+            <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] border-b pb-1">
+              2. Ngày Sinh & Tình Trạng
+            </h4>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
                   Ngày sinh (dd/mm/yyyy)
                 </label>
                 <input
                   type="text"
+                  placeholder="15/03/1970 hoặc 1970"
                   value={birthDate}
                   onChange={(e) => setBirthDate(e.target.value)}
-                  placeholder="Ví dụ: 12/04/1910"
-                  className="w-full px-3 py-1.5 border border-slate-300 rounded-lg bg-white focus:outline-none"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
-              {!isAlive && (
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                    Ngày mất (dd/mm/yyyy)
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Tình trạng hiện tại
+                </label>
+                <div className="flex items-center gap-4 mt-2">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="isAlive"
+                      checked={isAlive}
+                      onChange={() => setIsAlive(true)}
+                    />
+                    <span>Còn sống</span>
                   </label>
-                  <input
-                    type="text"
-                    value={deathDate}
-                    onChange={(e) => setDeathDate(e.target.value)}
-                    placeholder="Ví dụ: 04/05/1985"
-                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg bg-white focus:outline-none"
-                  />
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="isAlive"
+                      checked={!isAlive}
+                      onChange={() => setIsAlive(false)}
+                    />
+                    <span>Đã mất (Khuất)</span>
+                  </label>
                 </div>
-              )}
+              </div>
+            </div>
+
+            {!isAlive && (
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Ngày mất / Ngày giỗ (dd/mm/yyyy)
+                </label>
+                <input
+                  type="text"
+                  placeholder="10/05/2010"
+                  value={deathDate}
+                  onChange={(e) => setDeathDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Section 3: Liên hệ & Cư trú (Công khai) */}
+          <div className="space-y-3">
+            <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] border-b pb-1">
+              3. Liên Hệ & Địa Chỉ Nơi Ở (Công Khai)
+            </h4>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                  <Phone className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Số điện thoại</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="0912345678"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-rose-500" />
+                  <span>Địa chỉ nơi ở</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ví dụ: Hải Châu, Đà Nẵng"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
           </div>
 
-          {/* Quan hệ: Cha, Mẹ, Vợ/Chồng */}
-          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
-            <h4 className="font-bold text-slate-700 flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5 text-blue-600" />
-              <span>Quan Hệ Gia Đình</span>
+          {/* Section 4: Quan hệ Huyết thống & Hôn phối */}
+          <div className="space-y-3">
+            <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] border-b pb-1">
+              4. Quan Hệ Huyết Thống & Hôn Phối
             </h4>
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-[11px] text-slate-600 mb-1">
-                  Cha (Thân phụ)
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Thân phụ (Cha)
                 </label>
                 <select
                   value={fatherId}
                   onChange={(e) => setFatherId(e.target.value)}
-                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white text-xs"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">-- Không có / Khởi tổ --</option>
-                  {maleMembers.map((m) => (
+                  <option value="">-- Không rõ / Khởi tổ --</option>
+                  {potentialFathers.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.fullName} (Đời {m.generation})
                     </option>
@@ -375,16 +515,16 @@ export default function MemberFormModal({
               </div>
 
               <div>
-                <label className="block text-[11px] text-slate-600 mb-1">
-                  Mẹ (Thân mẫu)
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Thân mẫu (Mẹ)
                 </label>
                 <select
                   value={motherId}
                   onChange={(e) => setMotherId(e.target.value)}
-                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white text-xs"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">-- Không có --</option>
-                  {femaleMembers.map((m) => (
+                  <option value="">-- Không rõ --</option>
+                  {potentialMothers.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.fullName} (Đời {m.generation})
                     </option>
@@ -393,13 +533,13 @@ export default function MemberFormModal({
               </div>
 
               <div>
-                <label className="block text-[11px] text-slate-600 mb-1">
-                  Vợ / Chồng
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Vợ / Chồng (Hôn phối)
                 </label>
                 <select
                   value={spouseId}
                   onChange={(e) => setSpouseId(e.target.value)}
-                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white text-xs"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">-- Chưa có --</option>
                   {potentialSpouses.map((m) => (
@@ -412,35 +552,46 @@ export default function MemberFormModal({
             </div>
           </div>
 
-          {/* Ghi chú */}
+          {/* Section 5: Ghi chú & Nghề nghiệp */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Ghi chú thêm
+            <label className="block font-semibold text-slate-700 mb-1">
+              Ghi chú / Tiểu sử / Nghề nghiệp
             </label>
             <textarea
               rows={2}
+              placeholder="Chức vị, nghề nghiệp, đóng góp cho dòng họ..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ghi chú về công việc, nơi an táng hoặc thành tích..."
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-            />
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            ></textarea>
           </div>
 
-          {/* Footer buttons */}
-          <div className="pt-2 flex items-center justify-end gap-2">
+          {/* Actions */}
+          <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-slate-300 text-slate-600 hover:bg-slate-100 rounded-lg font-medium cursor-pointer"
+              className="px-4 py-2 border border-slate-300 rounded-xl text-slate-600 hover:bg-slate-50 font-semibold cursor-pointer"
             >
-              Hủy
+              Hủy bỏ
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-1.5 cursor-pointer shadow-sm transition-all active:scale-95"
+              className={`px-5 py-2 text-white font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer ${
+                isAdmin ? "bg-slate-900 hover:bg-slate-800" : "bg-blue-600 hover:bg-blue-700"
+              }`}
             >
-              <Save className="w-4 h-4" />
-              <span>{editingMember ? "Lưu Thay Đổi" : "Thêm Thành Viên"}</span>
+              {isAdmin ? (
+                <>
+                  <Save className="w-4 h-4 text-emerald-400" />
+                  <span>{editingMember ? "Lưu Thay Đổi (Trực Tiếp)" : "Thêm Ngay (Trực Tiếp)"}</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 text-amber-300" />
+                  <span>Gửi Đề Xuất Phê Duyệt</span>
+                </>
+              )}
             </button>
           </div>
         </form>

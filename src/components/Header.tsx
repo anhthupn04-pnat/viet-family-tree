@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   PlusCircle,
   LogIn,
+  LogOut,
   UserCheck,
   Eye,
   Calendar,
@@ -15,6 +16,7 @@ import {
   X,
   RotateCcw,
   Sparkles,
+  Bell,
 } from "lucide-react";
 import { Member } from "@/types/family";
 import { useFamilyStore } from "@/lib/family-store";
@@ -22,34 +24,26 @@ import { useFamilyStore } from "@/lib/family-store";
 interface HeaderProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  currentUser: {
-    email: string;
-    name: string;
-    role: "ADMIN" | "BRANCH_MANAGER" | "MEMBER" | "GUEST";
-  };
-  onSwitchRole: (role: "ADMIN" | "GUEST") => void;
   onOpenLogin: () => void;
   onOpenAddMember: () => void;
-  onOpenAnniversaries?: () => void;
-  onOpenKinship?: () => void;
   onFocusMember?: (memberId: string) => void;
-  pendingCount?: number;
 }
 
 export default function Header({
   activeTab,
   setActiveTab,
-  currentUser,
-  onSwitchRole,
   onOpenLogin,
   onOpenAddMember,
-  onOpenAnniversaries,
-  onOpenKinship,
   onFocusMember,
-  pendingCount = 0,
 }: HeaderProps) {
-  const { members, resetToSeedData } = useFamilyStore();
-  const isAdmin = currentUser.role === "ADMIN";
+  const {
+    members,
+    resetToSeedData,
+    isAdmin,
+    currentAdmin,
+    logoutAdmin,
+    pendingCount,
+  } = useFamilyStore();
 
   // Search autocomplete state
   const [searchTerm, setSearchTerm] = useState("");
@@ -75,7 +69,8 @@ export default function Header({
         const nameMatch = m.fullName.toLowerCase().includes(q);
         const nickMatch = m.nickname && m.nickname.toLowerCase().includes(q);
         const birthMatch = m.birthDate && m.birthDate.includes(q);
-        return nameMatch || nickMatch || birthMatch;
+        const phoneMatch = m.phone && m.phone.includes(q);
+        return nameMatch || nickMatch || birthMatch || phoneMatch;
       })
       .slice(0, 8);
   }, [searchTerm, members]);
@@ -94,14 +89,14 @@ export default function Header({
   const navItems = [
     { id: "tree", label: "Sơ đồ Cây Phả Hệ", icon: GitBranch },
     { id: "members", label: "Danh Sách Thành Viên (Bảng)", icon: Users },
-    { id: "anniversaries", label: "Lịch Lễ Giỗ", icon: Calendar },
+    { id: "anniversaries", label: "Lịch Lễ Giỗ & Sự Kiện", icon: Calendar },
     { id: "kinship", label: "Tra Cứu Xưng Hô", icon: Compass },
   ];
 
   if (isAdmin) {
     navItems.push({
       id: "admin",
-      label: "Bảng Kiểm Duyệt",
+      label: "Kiểm Duyệt & Quản Trị",
       icon: ShieldCheck,
     });
   }
@@ -131,7 +126,7 @@ export default function Header({
               onClick={() => {
                 if (
                   confirm(
-                    "Bạn có chắc muốn khôi phục dữ liệu gốc Đời 1 (Cụ Phan Thạnh & Trần Thị Hoàng) và Đời 2 (9 người con)?"
+                    "Bạn có chắc muốn khôi phục dữ liệu gốc Đời 1 (Cụ Phan Thạnh & Trần Thị Hoàng) và Đời 2 (9 người con) cùng các sự kiện mẫu?"
                   )
                 ) {
                   resetToSeedData();
@@ -144,53 +139,53 @@ export default function Header({
               <span>Khôi phục gốc (Đời 1 & 9 con)</span>
             </button>
 
-            {/* Role switch toggle */}
-            <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700">
+            {/* Notification Bell (for Admin or general pending queue) */}
+            {isAdmin && (
               <button
                 type="button"
-                onClick={() => onSwitchRole("GUEST")}
-                className={`px-2 py-0.5 rounded-md text-[10px] font-medium flex items-center gap-1 transition-all ${
-                  !isAdmin
-                    ? "bg-slate-700 text-white shadow-xs"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
+                onClick={() => setActiveTab("admin")}
+                className="relative p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors border border-slate-700 cursor-pointer"
+                title={`${pendingCount} yêu cầu đang chờ phê duyệt`}
               >
-                <Eye className="w-3 h-3" />
-                <span>Khách</span>
+                <Bell className="w-3.5 h-3.5 text-amber-400" />
+                {pendingCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white font-extrabold text-[9px] w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
+                    {pendingCount}
+                  </span>
+                )}
               </button>
-              <button
-                type="button"
-                onClick={() => onSwitchRole("ADMIN")}
-                className={`px-2 py-0.5 rounded-md text-[10px] font-medium flex items-center gap-1 transition-all ${
-                  isAdmin
-                    ? "bg-blue-600 text-white shadow-xs"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                <ShieldCheck className="w-3 h-3" />
-                <span>Quản trị</span>
-              </button>
-            </div>
+            )}
 
-            {/* Login or User badge */}
+            {/* Login / Admin User Badge */}
             {isAdmin ? (
-              <div className="flex items-center gap-1.5 bg-blue-950/60 text-blue-200 px-2.5 py-0.5 rounded-lg border border-blue-800/60 text-[11px]">
-                <UserCheck className="w-3.5 h-3.5 text-blue-400" />
-                <span className="font-mono text-[10px] hidden md:inline">
-                  {currentUser.email}
-                </span>
-                <span className="bg-blue-600 text-white font-bold text-[9px] px-1.5 rounded">
-                  ADMIN
-                </span>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 bg-blue-950/80 text-blue-200 px-2.5 py-0.5 rounded-lg border border-blue-800 text-[11px]">
+                  <UserCheck className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="font-semibold text-white hidden md:inline">
+                    {currentAdmin?.name}
+                  </span>
+                  <span className="bg-blue-600 text-white font-bold text-[9px] px-1.5 rounded">
+                    {currentAdmin?.role === "super_admin" ? "SUPER ADMIN" : "ADMIN"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={logoutAdmin}
+                  className="flex items-center gap-1 text-slate-400 hover:text-rose-300 text-[11px] px-1.5 py-0.5 rounded hover:bg-slate-800 transition-colors cursor-pointer"
+                  title="Đăng xuất quyền quản trị"
+                >
+                  <LogOut className="w-3 h-3" />
+                  <span className="hidden sm:inline">Đăng xuất</span>
+                </button>
               </div>
             ) : (
               <button
                 type="button"
                 onClick={onOpenLogin}
-                className="flex items-center gap-1 text-slate-300 hover:text-white px-2 py-0.5 rounded text-[11px] transition-colors"
+                className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-[11px] font-bold shadow-xs transition-colors cursor-pointer"
               >
-                <LogIn className="w-3 h-3 text-slate-400" />
-                <span>Đăng nhập</span>
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Đăng nhập Admin</span>
               </button>
             )}
           </div>
@@ -217,7 +212,7 @@ export default function Header({
               </span>
             </div>
             <p className="text-xs text-slate-500">
-              Sơ đồ gia phả & danh mục thành viên trực quan
+              Sơ đồ gia phả trực quan, lịch tộc & kiểm duyệt đổi mới
             </p>
           </div>
         </div>
@@ -234,7 +229,7 @@ export default function Header({
                 setIsSearchOpen(true);
               }}
               onFocus={() => setIsSearchOpen(true)}
-              placeholder="Tìm theo họ tên, biệt danh, năm sinh..."
+              placeholder="Tìm theo họ tên, SĐT, biệt danh, năm sinh..."
               className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
             />
             {searchTerm && (
@@ -279,7 +274,7 @@ export default function Header({
                         Đời {m.generation}
                         {m.orderInFamily ? ` • Con thứ ${m.orderInFamily}` : ""}
                         {m.birthDate ? ` • NS: ${m.birthDate}` : ""}
-                        {m.isAlive === false ? " (Đã mất)" : ""}
+                        {m.phone ? ` • SĐT: ${m.phone}` : ""}
                       </p>
                     </div>
                   </div>
@@ -297,10 +292,12 @@ export default function Header({
           <button
             type="button"
             onClick={onOpenAddMember}
-            className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all active:scale-95 cursor-pointer"
+            className={`inline-flex items-center gap-1.5 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all active:scale-95 cursor-pointer ${
+              isAdmin ? "bg-slate-900 hover:bg-slate-800" : "bg-blue-600 hover:bg-blue-700"
+            }`}
           >
             <PlusCircle className="w-4 h-4" />
-            <span>+ Thêm thành viên</span>
+            <span>{isAdmin ? "+ Thêm thành viên (Trực tiếp)" : "+ Đề xuất thành viên"}</span>
           </button>
         </div>
       </div>
@@ -329,7 +326,7 @@ export default function Header({
                 />
                 <span>{item.label}</span>
                 {item.id === "admin" && pendingCount > 0 && (
-                  <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full ml-1">
+                  <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full ml-1 animate-pulse">
                     {pendingCount}
                   </span>
                 )}

@@ -1,625 +1,853 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   ShieldCheck,
   CheckCircle2,
   XCircle,
   Clock,
   UserCheck,
-  Sliders,
   Users,
-  DollarSign,
-  BookOpen,
-  FileText,
   AlertTriangle,
   PlusCircle,
-  RefreshCw,
-  Eye,
-  Database,
+  Calendar,
+  Layers,
   ArrowRight,
+  Send,
+  KeyRound,
+  UserPlus,
+  Trash2,
+  Phone,
+  MapPin,
+  FileText,
+  BadgeCheck,
+  Search,
 } from "lucide-react";
+import { PendingSubmission, AdminUser } from "@/types/family";
+import { useFamilyStore } from "@/lib/family-store";
 
 interface AdminViewProps {
   onNavigateTab: (tab: string) => void;
-  onOpenCreateBranch: () => void;
   onOpenAddMember: () => void;
-  onMemberApproved?: () => void;
 }
 
-interface ChangeRequest {
-  id: string;
-  memberId?: string | null;
-  requesterName: string;
-  requesterEmail?: string | null;
-  changeType: string;
-  proposedData: string;
-  reason: string;
-  evidenceSource: string;
-  status: "PENDING" | "APPROVED" | "REJECTED";
-  reviewerNote?: string | null;
-  createdAt: string;
-}
+export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewProps) {
+  const {
+    members,
+    pendingSubmissions,
+    events,
+    adminUsers,
+    currentAdmin,
+    isSuperAdmin,
+    approveSubmission,
+    rejectSubmission,
+    createAdminUser,
+    getMember,
+  } = useFamilyStore();
 
-interface AuditLog {
-  id: string;
-  userName: string;
-  userEmail?: string | null;
-  action: string;
-  target?: string | null;
-  details?: string | null;
-  createdAt: string;
-}
+  const [activeTab, setActiveTab] = useState<"queue" | "stats" | "admins">("queue");
+  const [queueFilter, setQueueFilter] = useState<"all" | "pending" | "approved" | "rejected">(
+    "pending"
+  );
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
-export default function AdminView({
-  onNavigateTab,
-  onOpenCreateBranch,
-  onOpenAddMember,
-  onMemberApproved,
-}: AdminViewProps) {
-  const [activeSubTab, setActiveSubTab] = useState<"pendingMembers" | "requests" | "audit" | "overview">("pendingMembers");
-  const [requests, setRequests] = useState<ChangeRequest[]>([]);
-  const [pendingMembers, setPendingMembers] = useState<any[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [loadingRequests, setLoadingRequests] = useState(true);
-  const [loadingMembers, setLoadingMembers] = useState(true);
-  const [loadingLogs, setLoadingLogs] = useState(true);
-  const [reviewNote, setReviewNote] = useState<Record<string, string>>({});
-  const [processingId, setProcessingId] = useState<string | null>(null);
+  // Sub-admin form state
+  const [showAddAdminModal, setShowAddAdminModal] = useState(false);
+  const [newAdminName, setNewAdminName] = useState("");
+  const [newAdminEmail, setNewAdminEmail] = useState("");
+  const [newAdminPassword, setNewAdminPassword] = useState("");
+  const [newAdminRole, setNewAdminRole] = useState<"admin" | "super_admin">("admin");
+  const [adminFormMsg, setAdminFormMsg] = useState<{ type: "success" | "error"; text: string } | null>(
+    null
+  );
 
-  const fetchPendingMembers = async () => {
-    try {
-      setLoadingMembers(true);
-      const res = await fetch(`/api/members?status=pending&_t=${Date.now()}`, {
-        cache: "no-store",
-        headers: { "Cache-Control": "no-cache" },
-      });
-      const data = await res.json();
-      if (data.members) {
-        setPendingMembers(data.members);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoadingMembers(false);
+  // Statistics calculation
+  const totalMembers = members.length;
+  const maleCount = members.filter((m) => m.gender === "male").length;
+  const femaleCount = members.filter((m) => m.gender === "female").length;
+  const malePercent = totalMembers ? Math.round((maleCount / totalMembers) * 100) : 0;
+  const femalePercent = totalMembers ? 100 - malePercent : 0;
+  const livingCount = members.filter((m) => m.isAlive).length;
+  const deceasedCount = totalMembers - livingCount;
+
+  // Generations breakdown
+  const generationsMap: Record<number, number> = {};
+  members.forEach((m) => {
+    const g = m.generation || 1;
+    generationsMap[g] = (generationsMap[g] || 0) + 1;
+  });
+  const maxGen = Math.max(...Object.keys(generationsMap).map(Number), 2);
+
+  // Filtered queue
+  const filteredQueue = pendingSubmissions.filter((s) => {
+    if (queueFilter === "all") return true;
+    return s.status === queueFilter;
+  });
+
+  const pendingCount = pendingSubmissions.filter((s) => s.status === "pending").length;
+
+  const handleCreateSubAdmin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminFormMsg(null);
+    if (!newAdminName.trim() || !newAdminEmail.trim() || !newAdminPassword.trim()) {
+      setAdminFormMsg({ type: "error", text: "Vui lòng điền đầy đủ thông tin!" });
+      return;
+    }
+
+    const res = createAdminUser({
+      name: newAdminName.trim(),
+      email: newAdminEmail.trim(),
+      password: newAdminPassword.trim(),
+      role: newAdminRole,
+    });
+
+    if (res.success) {
+      setAdminFormMsg({ type: "success", text: res.message });
+      setNewAdminName("");
+      setNewAdminEmail("");
+      setNewAdminPassword("");
+      setTimeout(() => {
+        setShowAddAdminModal(false);
+        setAdminFormMsg(null);
+      }, 1500);
+    } else {
+      setAdminFormMsg({ type: "error", text: res.message });
     }
   };
 
-  const fetchRequests = async () => {
-    try {
-      setLoadingRequests(true);
-      const res = await fetch(`/api/change-requests?_t=${Date.now()}`, {
-        cache: "no-store",
-        headers: { "Cache-Control": "no-cache" },
-      });
-      const data = await res.json();
-      if (data.requests) {
-        setRequests(data.requests);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoadingRequests(false);
-    }
+  const handleApprove = (id: string) => {
+    approveSubmission(id);
   };
 
-  const fetchAuditLogs = async () => {
-    try {
-      setLoadingLogs(true);
-      const res = await fetch(`/api/audit-logs?_t=${Date.now()}`, {
-        cache: "no-store",
-        headers: { "Cache-Control": "no-cache" },
-      });
-      const data = await res.json();
-      if (data.logs) {
-        setAuditLogs(data.logs);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoadingLogs(false);
+  const handleRejectConfirm = (id: string) => {
+    if (!rejectReason.trim()) {
+      alert("Vui lòng nhập lý do từ chối để thông báo đến người đề xuất.");
+      return;
     }
+    rejectSubmission(id, rejectReason.trim());
+    setRejectingId(null);
+    setRejectReason("");
   };
-
-  useEffect(() => {
-    fetchPendingMembers();
-    fetchRequests();
-    fetchAuditLogs();
-  }, []);
-
-  const handleMemberApproval = async (id: string, action: "APPROVE" | "REJECT") => {
-    try {
-      setProcessingId(id);
-      const res = await fetch("/api/members", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, action }),
-      });
-      if (res.ok) {
-        fetchPendingMembers();
-        fetchAuditLogs();
-        onMemberApproved?.();
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  const handleReview = async (id: string, status: "APPROVED" | "REJECTED") => {
-    try {
-      setProcessingId(id);
-      const note = reviewNote[id] || "";
-      const res = await fetch("/api/change-requests", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, status, reviewerNote: note }),
-      });
-      if (res.ok) {
-        fetchRequests();
-        fetchAuditLogs();
-        onMemberApproved?.();
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  const pendingRequests = requests.filter((r) => r.status === "PENDING");
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Top Banner Admin Identity */}
-      <div className="bg-gradient-to-r from-[#8B1E1E] via-[#6F1414] to-[#4A0E0E] text-white p-6 rounded-3xl shadow-xl border border-[#C59B27]/40 relative overflow-hidden">
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex items-center space-x-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-amber-400/20 border border-amber-300/40 flex items-center justify-center text-amber-300 shadow-md">
-              <ShieldCheck className="w-7 h-7" />
+    <div className="space-y-6">
+      {/* Top Banner / Navigation */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+            <h2 className="text-xl font-bold text-slate-900">
+              Trung Tâm Quản Trị & Kiểm Duyệt Tộc Phan
+            </h2>
+            <span className="text-xs bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full">
+              Admin Portal
+            </span>
+          </div>
+          <p className="text-xs text-slate-500">
+            Xin chào, <strong>{currentAdmin?.name || "Quản trị viên"}</strong> (
+            {currentAdmin?.role === "super_admin" ? "Super Admin" : "Ban Trị Sự"}). Bạn có toàn quyền
+            thao tác trực tiếp và phê duyệt hồ sơ dòng họ.
+          </p>
+        </div>
+
+        {/* Tab Switcher */}
+        <div className="flex items-center bg-slate-100 p-1 rounded-xl self-start md:self-auto">
+          <button
+            type="button"
+            onClick={() => setActiveTab("queue")}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeTab === "queue"
+                ? "bg-white text-blue-600 shadow-xs"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Hàng Đợi Xét Duyệt</span>
+            {pendingCount > 0 && (
+              <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-extrabold">
+                {pendingCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("stats")}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeTab === "stats"
+                ? "bg-white text-blue-600 shadow-xs"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Dashboard Thống Kê</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("admins")}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeTab === "admins"
+                ? "bg-white text-blue-600 shadow-xs"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <UserCheck className="w-3.5 h-3.5" />
+            <span>Tài Khoản Admin ({adminUsers.length})</span>
+          </button>
+        </div>
+      </div>
+
+      {/* TAB 1: HÀNG ĐỢI XÉT DUYỆT (APPROVAL QUEUE) */}
+      {activeTab === "queue" && (
+        <div className="space-y-4">
+          {/* Filter Bar */}
+          <div className="flex items-center justify-between flex-wrap gap-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-slate-500 mr-2">Lọc trạng thái:</span>
+              <button
+                type="button"
+                onClick={() => setQueueFilter("pending")}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  queueFilter === "pending"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                Chờ duyệt ({pendingCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setQueueFilter("approved")}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  queueFilter === "approved"
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                Đã duyệt (
+                {pendingSubmissions.filter((s) => s.status === "approved").length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setQueueFilter("rejected")}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  queueFilter === "rejected"
+                    ? "bg-rose-600 text-white shadow-xs"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                Đã từ chối (
+                {pendingSubmissions.filter((s) => s.status === "rejected").length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setQueueFilter("all")}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  queueFilter === "all"
+                    ? "bg-slate-800 text-white shadow-xs"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                Tất cả ({pendingSubmissions.length})
+              </button>
             </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="text-xs bg-[#C59B27] text-[#24150b] font-bold px-2 py-0.5 rounded">
-                  TỔNG QUẢN TRỊ
-                </span>
-                <span className="text-xs text-amber-200/80 font-mono">
-                  anhthuphan0102@gmail.com
-                </span>
-              </div>
-              <h1 className="text-2xl font-bold font-serif text-amber-100 mt-1">
-                Bảng Điều Khiển Quản Trị Hệ Thống
-              </h1>
-              <p className="text-xs text-amber-100/70 mt-0.5">
-                Quản lý các nhánh dòng họ (1-4 chi mẫu khởi tạo), phê duyệt thành viên mới & thẩm định đề xuất phả hệ.
+
+            <div className="text-xs text-slate-500">
+              Mẹo: Phê duyệt 1-click sẽ lập tức cập nhật cây phả hệ theo thời gian thực.
+            </div>
+          </div>
+
+          {/* Submissions List */}
+          {filteredQueue.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-500">
+              <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
+              <h3 className="font-bold text-slate-800 text-base">
+                Không có yêu cầu nào trong danh sách
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Tất cả các đề xuất từ thành viên và khách thăm quan đã được xử lý xong.
               </p>
             </div>
-          </div>
-
-          {/* Quick Action Buttons */}
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={onOpenCreateBranch}
-              className="px-3.5 py-2 bg-[#C59B27] hover:bg-[#B0881F] text-[#24150B] font-bold text-xs rounded-xl shadow-md transition-all flex items-center space-x-1.5"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span>Tạo Nhánh Mới</span>
-            </button>
-            <button
-              type="button"
-              onClick={onOpenAddMember}
-              className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs rounded-xl border border-white/20 transition-all flex items-center space-x-1.5"
-            >
-              <Users className="w-4 h-4 text-amber-300" />
-              <span>Thêm Thành Viên</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Sub tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-[#E5DAC6] pb-2">
-        <button
-          type="button"
-          onClick={() => setActiveSubTab("pendingMembers")}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
-            activeSubTab === "pendingMembers"
-              ? "bg-[#1E5F52] text-white shadow-sm"
-              : "bg-white text-stone-600 hover:bg-stone-100"
-          }`}
-        >
-          <UserCheck className="w-4 h-4 text-[#FADB7F]" />
-          <span>Thành Viên Mới Chờ Duyệt ({pendingMembers.length})</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveSubTab("requests")}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
-            activeSubTab === "requests"
-              ? "bg-[#8B1E1E] text-white shadow-sm"
-              : "bg-white text-stone-600 hover:bg-stone-100"
-          }`}
-        >
-          <Clock className="w-4 h-4" />
-          <span>Đề Xuất Chỉnh Sửa ({pendingRequests.length})</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveSubTab("audit")}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
-            activeSubTab === "audit"
-              ? "bg-[#8B1E1E] text-white shadow-sm"
-              : "bg-white text-stone-600 hover:bg-stone-100"
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          <span>Nhật Ký Hoạt Động ({auditLogs.length})</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveSubTab("overview")}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
-            activeSubTab === "overview"
-              ? "bg-[#8B1E1E] text-white shadow-sm"
-              : "bg-white text-stone-600 hover:bg-stone-100"
-          }`}
-        >
-          <Database className="w-4 h-4" />
-          <span>Cấu Hình & Chi Nhánh</span>
-        </button>
-      </div>
-
-      {/* Sub tab: Pending Members (Thành viên đóng góp chờ duyệt) */}
-      {activeSubTab === "pendingMembers" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold font-serif text-[#1E5F52] flex items-center space-x-2">
-              <UserCheck className="w-5 h-5 text-[#E0A926]" />
-              <span>Danh Sách Đề Xuất Thêm Thành Viên Mới Từ Cộng Đồng</span>
-            </h2>
-            <button
-              type="button"
-              onClick={fetchPendingMembers}
-              className="text-xs text-stone-500 hover:text-[#1E5F52] flex items-center space-x-1"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Làm mới</span>
-            </button>
-          </div>
-
-          {loadingMembers ? (
-            <div className="p-8 text-center text-stone-400 text-xs">Đang tải danh sách chờ duyệt...</div>
-          ) : pendingMembers.length === 0 ? (
-            <div className="bg-white rounded-2xl p-8 text-center border border-[#E8DEC7] text-stone-500 text-xs">
-              Hiện tại không có thành viên mới nào đang chờ duyệt.
-            </div>
           ) : (
-            <div className="space-y-3">
-              {pendingMembers.map((m) => (
-                <div
-                  key={m.id}
-                  className="bg-white rounded-2xl border-2 border-[#E0A926]/40 p-5 shadow-sm hover:shadow-md transition-all space-y-3"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-100 pb-3">
-                    <div className="flex items-center space-x-2.5">
-                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
-                        Chờ Phê Duyệt
-                      </span>
-                      <h3 className="font-serif font-bold text-sm text-[#1E5F52]">
-                        {m.fullName}
-                      </h3>
-                      {m.courtesyName && (
-                        <span className="text-xs text-stone-500 italic">
-                          (Tự: {m.courtesyName})
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[11px] text-stone-400 font-mono">
-                      Mã tạm: {m.memberCode} • Đời thứ {m.generation}
-                    </span>
-                  </div>
+            <div className="space-y-4">
+              {filteredQueue.map((item) => {
+                const isPending = item.status === "pending";
+                const isApproved = item.status === "approved";
+                const isRejected = item.status === "rejected";
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-stone-700 bg-[#FAF7EE] p-3 rounded-xl border border-[#E8DEC7]">
-                    <div>
-                      <span className="text-[10px] text-stone-400 block font-semibold">Giới tính:</span>
-                      <span>{m.gender === "FEMALE" ? "Nữ" : "Nam"}</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-stone-400 block font-semibold">Trạng thái:</span>
-                      <span>{m.isAlive ? "Còn sống" : "Đã mất"}</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-stone-400 block font-semibold">Chi họ:</span>
-                      <span>{m.branch?.branchName || "Chưa phân chi"}</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-stone-400 block font-semibold">Người đề xuất:</span>
-                      <span className="font-medium text-[#8B1E1E]">{m.submitterName || "Cộng đồng"}</span>
-                    </div>
-                  </div>
-
-                  {m.submitterNote && (
-                    <div className="text-xs text-stone-600 bg-stone-50 p-2.5 rounded-lg border border-stone-200">
-                      <strong>Ghi chú từ người gửi:</strong> {m.submitterNote}
-                    </div>
-                  )}
-
-                  <div className="pt-2 flex items-center justify-end space-x-2">
-                    <button
-                      type="button"
-                      disabled={processingId === m.id}
-                      onClick={() => handleMemberApproval(m.id, "REJECT")}
-                      className="px-3.5 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold rounded-xl transition-all flex items-center space-x-1"
-                    >
-                      <XCircle className="w-3.5 h-3.5 text-stone-500" />
-                      <span>Từ chối</span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={processingId === m.id}
-                      onClick={() => handleMemberApproval(m.id, "APPROVE")}
-                      className="px-4 py-1.5 bg-[#1E5F52] hover:bg-[#16483E] text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center space-x-1.5 border border-[#E0A926]/40"
-                    >
-                      <CheckCircle2 className="w-4 h-4 text-[#FADB7F]" />
-                      <span>Phê Duyệt Vào Cây Gia Phả</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Content based on sub tab */}
-      {activeSubTab === "requests" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold font-serif text-[#8B1E1E]">
-              Danh Sách Đề Xuất Chỉnh Sửa Dữ Liệu Gia Phả
-            </h2>
-            <button
-              type="button"
-              onClick={fetchRequests}
-              className="text-xs text-stone-500 hover:text-[#8B1E1E] flex items-center space-x-1"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Làm mới</span>
-            </button>
-          </div>
-
-          {loadingRequests ? (
-            <div className="p-8 text-center text-stone-400 text-xs">Đang tải đề xuất...</div>
-          ) : requests.length === 0 ? (
-            <div className="bg-white rounded-2xl p-8 text-center border border-[#E8DEC7] text-stone-500 text-xs">
-              Chưa có đề xuất thay đổi nào từ thành viên dòng họ.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {requests.map((req) => (
-                <div
-                  key={req.id}
-                  className={`bg-white rounded-2xl border p-5 shadow-sm transition-all ${
-                    req.status === "PENDING"
-                      ? "border-amber-300 ring-1 ring-amber-200"
-                      : req.status === "APPROVED"
-                      ? "border-emerald-200 bg-emerald-50/20"
-                      : "border-stone-200 opacity-70"
-                  }`}
-                >
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-stone-100 pb-3">
-                    <div className="flex items-center space-x-2">
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          req.status === "PENDING"
-                            ? "bg-amber-100 text-amber-800"
-                            : req.status === "APPROVED"
-                            ? "bg-emerald-100 text-emerald-800"
-                            : "bg-stone-100 text-stone-700"
-                        }`}
-                      >
-                        {req.status === "PENDING"
-                          ? "Chờ xác minh"
-                          : req.status === "APPROVED"
-                          ? "Đã duyệt"
-                          : "Từ chối"}
-                      </span>
-                      <span className="text-xs font-bold text-stone-800">
-                        Người gửi: {req.requesterName}
-                      </span>
-                      {req.requesterEmail && (
-                        <span className="text-xs text-stone-500 font-mono">
-                          ({req.requesterEmail})
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[11px] text-stone-400">
-                      Gửi lúc: {new Date(req.createdAt).toLocaleString("vi-VN")}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-3 text-xs">
-                    <div>
-                      <p className="font-semibold text-stone-700">Lý do đề xuất:</p>
-                      <p className="text-stone-600 bg-stone-50 p-2.5 rounded-lg mt-1 border border-stone-100">
-                        {req.reason}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="font-semibold text-stone-700">Nguồn tư liệu minh chứng:</p>
-                      <p className="text-stone-600 bg-stone-50 p-2.5 rounded-lg mt-1 border border-stone-100">
-                        {req.evidenceSource}
-                      </p>
-                    </div>
-                  </div>
-
-                  {req.proposedData && (
-                    <div className="text-xs py-1">
-                      <p className="font-semibold text-stone-700 mb-1">Dữ liệu đề xuất thay đổi:</p>
-                      <pre className="bg-[#FAF7EE] p-2.5 rounded-lg border border-[#E8DEC7] text-stone-800 text-[11px] font-mono overflow-x-auto">
-                        {req.proposedData}
-                      </pre>
-                    </div>
-                  )}
-
-                  {req.status === "PENDING" && (
-                    <div className="pt-3 border-t border-stone-100 flex flex-col sm:flex-row items-center justify-between gap-3">
-                      <input
-                        type="text"
-                        placeholder="Ghi chú xác minh của Ban Quản Trị..."
-                        value={reviewNote[req.id] || ""}
-                        onChange={(e) =>
-                          setReviewNote({ ...reviewNote, [req.id]: e.target.value })
-                        }
-                        className="w-full sm:max-w-md px-3 py-1.5 border border-stone-300 rounded-lg text-xs focus:ring-1 focus:ring-[#8B1E1E] focus:outline-hidden"
-                      />
-                      <div className="flex items-center space-x-2 shrink-0">
-                        <button
-                          type="button"
-                          disabled={processingId === req.id}
-                          onClick={() => handleReview(req.id, "REJECTED")}
-                          className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold rounded-lg transition-all flex items-center space-x-1"
+                return (
+                  <div
+                    key={item.id}
+                    className={`bg-white rounded-2xl border p-5 shadow-xs transition-all ${
+                      isPending
+                        ? "border-amber-300 ring-2 ring-amber-400/20"
+                        : isApproved
+                        ? "border-emerald-200 bg-emerald-50/20"
+                        : "border-slate-200 bg-slate-50/60"
+                    }`}
+                  >
+                    {/* Header Item */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 mb-3">
+                      <div className="flex items-center gap-2.5">
+                        <span
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-extrabold uppercase tracking-wide ${
+                            item.actionType === "CREATE"
+                              ? "bg-blue-100 text-blue-800"
+                              : item.actionType === "UPDATE"
+                              ? "bg-amber-100 text-amber-900"
+                              : item.actionType === "DELETE"
+                              ? "bg-rose-100 text-rose-800"
+                              : "bg-purple-100 text-purple-800"
+                          }`}
                         >
-                          <XCircle className="w-3.5 h-3.5 text-stone-500" />
-                          <span>Từ chối</span>
-                        </button>
-                        <button
-                          type="button"
-                          disabled={processingId === req.id}
-                          onClick={() => handleReview(req.id, "APPROVED")}
-                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center space-x-1"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Phê duyệt</span>
-                        </button>
+                          {item.actionType === "CREATE"
+                            ? "Thêm Thành Viên Mới"
+                            : item.actionType === "UPDATE"
+                            ? "Chỉnh Sửa Hồ Sơ"
+                            : item.actionType === "DELETE"
+                            ? "Yêu Cầu Xóa"
+                            : "Thêm Sự Kiện / Lễ Giỗ"}
+                        </span>
+
+                        <span className="text-xs text-slate-400 font-mono">
+                          ID: {item.id} • {item.submittedAt}
+                        </span>
+                      </div>
+
+                      {/* Status Badge */}
+                      <div>
+                        {isPending && (
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-100 px-3 py-1 rounded-full">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>Đang Chờ Duyệt</span>
+                          </span>
+                        )}
+                        {isApproved && (
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Đã Chấp Thuận</span>
+                          </span>
+                        )}
+                        {isRejected && (
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-700 bg-rose-100 px-3 py-1 rounded-full">
+                            <XCircle className="w-3.5 h-3.5" />
+                            <span>Đã Từ Chối</span>
+                          </span>
+                        )}
                       </div>
                     </div>
-                  )}
 
-                  {req.reviewerNote && (
-                    <p className="text-[11px] text-stone-500 italic mt-2">
-                      Ghi chú duyệt: {req.reviewerNote}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Sub tab: Audit Logs */}
-      {activeSubTab === "audit" && (
-        <div className="bg-white rounded-2xl border border-[#E8DEC7] p-5 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold font-serif text-[#8B1E1E]">
-              Nhật Ký Hoạt Động & Bảo Mật Hệ Thống (Audit Logs)
-            </h2>
-            <button
-              type="button"
-              onClick={fetchAuditLogs}
-              className="text-xs text-stone-500 hover:text-[#8B1E1E] flex items-center space-x-1"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Làm mới</span>
-            </button>
-          </div>
-
-          {loadingLogs ? (
-            <div className="p-8 text-center text-stone-400 text-xs">Đang tải nhật ký...</div>
-          ) : auditLogs.length === 0 ? (
-            <div className="p-8 text-center text-stone-500 text-xs">
-              Chưa có nhật ký hoạt động nào được ghi nhận.
-            </div>
-          ) : (
-            <div className="divide-y divide-stone-100 max-h-[600px] overflow-y-auto pr-2">
-              {auditLogs.map((log) => (
-                <div key={log.id} className="py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
-                  <div className="space-y-0.5">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-bold text-[#8B1E1E] bg-[#8B1E1E]/10 px-2 py-0.5 rounded text-[11px]">
-                        {log.action}
-                      </span>
-                      {log.target && (
-                        <span className="font-semibold text-stone-800">
-                          {log.target}
-                        </span>
-                      )}
+                    {/* Submitter Info */}
+                    <div className="flex items-center gap-4 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200/60 mb-3">
+                      <div>
+                        Người gửi đề xuất: <strong>{item.submitterName}</strong>
+                      </div>
+                      <div className="flex items-center gap-1 text-blue-700 font-mono font-medium">
+                        <Phone className="w-3 h-3" />
+                        <span>{item.submitterPhone}</span>
+                      </div>
                     </div>
-                    {log.details && (
-                      <p className="text-stone-600 text-[11px] pl-0.5">
-                        {log.details}
-                      </p>
+
+                    {/* Content Detail based on actionType */}
+                    {item.actionType === "CREATE" && (
+                      <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5">
+                        <h4 className="font-bold text-slate-900 text-sm text-blue-700">
+                          {item.data?.fullName}
+                        </h4>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-slate-600">
+                          <div>
+                            Đời: <strong>{item.data?.generation}</strong>
+                          </div>
+                          <div>
+                            Giới tính:{" "}
+                            <strong>{item.data?.gender === "male" ? "Nam" : "Nữ"}</strong>
+                          </div>
+                          <div>
+                            Ngày sinh: <strong>{item.data?.birthDate || "Chưa rõ"}</strong>
+                          </div>
+                          <div>
+                            Thứ tự con: <strong>{item.data?.orderInFamily || "Chưa rõ"}</strong>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-600 pt-1">
+                          <div>
+                            SĐT: <strong>{item.data?.phone || "Chưa có"}</strong>
+                          </div>
+                          <div>
+                            Địa chỉ: <strong>{item.data?.address || "Chưa có"}</strong>
+                          </div>
+                        </div>
+                        {item.data?.notes && (
+                          <p className="text-slate-500 italic pt-1">
+                            Ghi chú: {item.data.notes}
+                          </p>
+                        )}
+                      </div>
                     )}
-                    <p className="text-[10px] text-stone-400">
-                      Bởi: <span className="font-medium text-stone-600">{log.userName}</span> ({log.userEmail || "Hệ thống"})
-                    </p>
+
+                    {/* UPDATE: Comparison Table (Old Data vs New Data) */}
+                    {item.actionType === "UPDATE" && (
+                      <div className="space-y-2">
+                        <div className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                          <span>
+                            Đối chiếu thay đổi hồ sơ:{" "}
+                            <strong className="text-blue-700">
+                              {item.data?.fullName || item.oldData?.fullName}
+                            </strong>
+                          </span>
+                          <span className="text-[11px] text-slate-400">
+                            (Bên trái: Dữ liệu cũ • Bên phải: Dữ liệu đề xuất mới)
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                          {/* Old Data */}
+                          <div className="p-3 bg-red-50/50 border border-red-200 rounded-xl space-y-1.5">
+                            <span className="font-bold text-red-800 text-[11px] uppercase tracking-wider block border-b border-red-200 pb-1">
+                              Dữ Liệu Hiện Tại (Cũ)
+                            </span>
+                            <p>
+                              Họ tên: <strong>{item.oldData?.fullName || "Chưa có"}</strong>
+                            </p>
+                            <p>
+                              SĐT: <strong>{item.oldData?.phone || "Chưa cập nhật"}</strong>
+                            </p>
+                            <p>
+                              Địa chỉ:{" "}
+                              <strong>{item.oldData?.address || "Chưa cập nhật"}</strong>
+                            </p>
+                            <p>
+                              Tiểu sử:{" "}
+                              <span className="text-slate-600">
+                                {item.oldData?.notes || "Chưa có"}
+                              </span>
+                            </p>
+                          </div>
+
+                          {/* Proposed New Data */}
+                          <div className="p-3 bg-emerald-50/60 border border-emerald-300 rounded-xl space-y-1.5">
+                            <span className="font-bold text-emerald-800 text-[11px] uppercase tracking-wider block border-b border-emerald-200 pb-1">
+                              Dữ Liệu Đề Xuất (Mới)
+                            </span>
+                            <p>
+                              Họ tên:{" "}
+                              <strong className="text-emerald-900">
+                                {item.data?.fullName || "Chưa có"}
+                              </strong>
+                            </p>
+                            <p>
+                              SĐT:{" "}
+                              <strong className="text-emerald-900">
+                                {item.data?.phone || "Chưa cập nhật"}
+                              </strong>
+                            </p>
+                            <p>
+                              Địa chỉ:{" "}
+                              <strong className="text-emerald-900">
+                                {item.data?.address || "Chưa cập nhật"}
+                              </strong>
+                            </p>
+                            <p>
+                              Tiểu sử:{" "}
+                              <span className="text-emerald-900 font-medium">
+                                {item.data?.notes || "Chưa có"}
+                              </span>
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* DELETE */}
+                    {item.actionType === "DELETE" && (
+                      <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs space-y-1.5">
+                        <div className="font-bold text-rose-900">
+                          Đề xuất xóa thành viên: {item.data?.fullName} (Đời {item.data?.generation})
+                        </div>
+                        <p className="text-slate-700">
+                          <strong>Lý do yêu cầu xóa:</strong> {item.data?.reason}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* ADD_EVENT */}
+                    {item.actionType === "ADD_EVENT" && (
+                      <div className="p-3.5 bg-purple-50 border border-purple-200 rounded-xl text-xs space-y-1.5">
+                        <h4 className="font-bold text-purple-900 text-sm">{item.data?.title}</h4>
+                        <div className="flex gap-4 text-slate-700">
+                          <span>
+                            Âm lịch: <strong>{item.data?.lunarDate}</strong>
+                          </span>
+                          <span>
+                            Dương lịch: <strong>{item.data?.solarDate}</strong>
+                          </span>
+                          <span>
+                            Địa điểm: <strong>{item.data?.location || "Chưa rõ"}</strong>
+                          </span>
+                        </div>
+                        {item.data?.description && (
+                          <p className="text-slate-600">{item.data.description}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Rejection reason (if rejected) */}
+                    {isRejected && item.rejectionReason && (
+                      <div className="mt-2.5 p-2.5 bg-rose-100/70 border border-rose-300 rounded-lg text-xs text-rose-900">
+                        <strong>Lý do từ chối:</strong> {item.rejectionReason}
+                      </div>
+                    )}
+
+                    {/* Action Buttons (1-click Approve or Reject) */}
+                    {isPending && (
+                      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                        {rejectingId === item.id ? (
+                          <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <input
+                              type="text"
+                              placeholder="Nhập lý do từ chối..."
+                              value={rejectReason}
+                              onChange={(e) => setRejectReason(e.target.value)}
+                              className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRejectConfirm(item.id)}
+                              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-xs cursor-pointer"
+                            >
+                              Xác nhận từ chối
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRejectingId(null);
+                                setRejectReason("");
+                              }}
+                              className="px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-600 hover:bg-slate-100 cursor-pointer"
+                            >
+                              Hủy
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setRejectingId(item.id)}
+                              className="px-3.5 py-1.5 border border-rose-300 text-rose-700 hover:bg-rose-50 rounded-xl text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5"
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                              <span>Từ chối</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleApprove(item.id)}
+                              className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-colors flex items-center gap-1.5"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Chấp thuận (1-Click)</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <span className="text-[11px] text-stone-400 font-mono shrink-0">
-                    {new Date(log.createdAt).toLocaleString("vi-VN")}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       )}
 
-      {/* Sub tab: Overview & Branches guidance */}
-      {activeSubTab === "overview" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white rounded-2xl border border-[#E8DEC7] p-6 shadow-sm space-y-4">
-            <h3 className="text-base font-bold font-serif text-[#8B1E1E] flex items-center space-x-2">
-              <Sliders className="w-4 h-4 text-[#C59B27]" />
-              <span>Quản Lý Chi Họ & Nhánh Mẫu Ban Đầu</span>
-            </h3>
-            <p className="text-xs text-stone-600 leading-relaxed">
-              Theo quy định khởi tạo của dòng họ, hệ thống ban đầu đã thiết lập sẵn <strong>1-4 chi mẫu</strong>:
-            </p>
-            <ul className="text-xs text-stone-700 space-y-1.5 bg-[#FAF7EE] p-3 rounded-xl border border-[#E8DEC7]">
-              <li>• <strong>Chi 1</strong>: Chi Trưởng (Tiền Giang) — Trông coi từ đường chính.</li>
-              <li>• <strong>Chi 2</strong>: Chi Giáp (Hậu Giang) — Phát triển kinh thương & kỹ nghệ.</li>
-              <li>• <strong>Chi 3</strong>: Chi Ất (Tây Đô) — Tập trung học vấn, giáo dục.</li>
-              <li>• <strong>Chi 4</strong>: Chi Bính (Thăng Long) — Lập nghiệp tại thủ đô và phương Nam.</li>
-            </ul>
-            <p className="text-xs text-stone-600">
-              Với quyền Tổng Quản Trị, bạn có thể tạo thêm các Chi 5, Chi 6,... hoặc chỉnh sửa thông tin người đứng đầu bất cứ lúc nào.
-            </p>
-            <button
-              type="button"
-              onClick={() => onNavigateTab("branches")}
-              className="px-4 py-2 bg-[#8B1E1E] hover:bg-[#721515] text-white text-xs font-semibold rounded-xl shadow-md transition-all flex items-center space-x-1.5"
-            >
-              <span>Xem Quản Lý Chi Nhánh</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-[#E8DEC7] p-6 shadow-sm space-y-4">
-            <h3 className="text-base font-bold font-serif text-[#8B1E1E] flex items-center space-x-2">
-              <Database className="w-4 h-4 text-[#C59B27]" />
-              <span>An Toàn & Sao Lưu Dữ Liệu</span>
-            </h3>
-            <p className="text-xs text-stone-600 leading-relaxed">
-              Dữ liệu gia phả là tài sản văn hóa trường tồn của dòng họ. Hệ thống áp dụng cơ chế xác thực server-side, phòng chống chu trình huyết thống (Cycle Prevention) và tự động ghi log mọi thay đổi.
-            </p>
-            <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-xl text-xs space-y-2">
-              <p className="font-bold text-amber-900 flex items-center space-x-1">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>Trạng thái bảo vệ dữ liệu:</span>
-              </p>
-              <p className="text-amber-800 text-[11px]">
-                • Mật khẩu quản trị được băm với Bcrypt Salt 10 rounds.<br />
-                • Ràng buộc khóa ngoại Cascade & SetNull an toàn.<br />
-                • Ngăn chặn xóa thành viên còn liên kết con cái.
+      {/* TAB 2: DASHBOARD THỐNG KÊ (STATS) */}
+      {activeTab === "stats" && (
+        <div className="space-y-6">
+          {/* Top KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
+              <div className="flex items-center justify-between text-slate-500 mb-2">
+                <span className="text-xs font-bold uppercase tracking-wider">Tổng Nhân Khẩu</span>
+                <Users className="w-5 h-5 text-blue-600" />
+              </div>
+              <div className="text-3xl font-extrabold text-slate-900">{totalMembers}</div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {livingCount} người đang sống • {deceasedCount} tiền nhân
               </p>
             </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
+              <div className="flex items-center justify-between text-slate-500 mb-2">
+                <span className="text-xs font-bold uppercase tracking-wider">Tỷ Lệ Giới Tính</span>
+                <span className="text-xs font-bold text-blue-700 font-mono">
+                  {malePercent}% / {femalePercent}%
+                </span>
+              </div>
+              <div className="text-2xl font-extrabold text-slate-900 flex items-center gap-2">
+                <span className="text-blue-600">{maleCount} Nam</span>
+                <span className="text-slate-300">/</span>
+                <span className="text-rose-500">{femaleCount} Nữ</span>
+              </div>
+              {/* Progress bar */}
+              <div className="w-full bg-rose-200 h-2 rounded-full overflow-hidden mt-2">
+                <div
+                  className="bg-blue-600 h-full rounded-full transition-all"
+                  style={{ width: `${malePercent}%` }}
+                ></div>
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
+              <div className="flex items-center justify-between text-slate-500 mb-2">
+                <span className="text-xs font-bold uppercase tracking-wider">Quy Mô Thế Hệ</span>
+                <Layers className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div className="text-3xl font-extrabold text-slate-900">{maxGen} Đời</div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Phân nhánh liên tục từ Cụ Khởi Tổ
+              </p>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
+              <div className="flex items-center justify-between text-slate-500 mb-2">
+                <span className="text-xs font-bold uppercase tracking-wider">Hàng Đợi Duyệt</span>
+                <Clock className="w-5 h-5 text-amber-500" />
+              </div>
+              <div className="text-3xl font-extrabold text-amber-600">{pendingCount}</div>
+              <p className="text-[11px] text-slate-400 mt-1">Yêu cầu đang chờ xét duyệt</p>
+            </div>
+          </div>
+
+          {/* Detailed Generations Breakdown Table */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+            <h3 className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <Layers className="w-5 h-5 text-blue-600" />
+              <span>Phân Bố Nhân Khẩu Theo Từng Thế Hệ (Đời Thứ)</span>
+            </h3>
+
+            <div className="space-y-3">
+              {Array.from({ length: maxGen }, (_, i) => i + 1).map((gen) => {
+                const count = generationsMap[gen] || 0;
+                const percent = totalMembers ? Math.round((count / totalMembers) * 100) : 0;
+                const genMembers = members.filter((m) => m.generation === gen);
+
+                return (
+                  <div key={gen} className="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+                    <div className="flex items-center justify-between text-xs mb-1.5">
+                      <span className="font-bold text-slate-800">
+                        ĐỜI THỨ {gen}{" "}
+                        {gen === 1 ? "(Cụ Khởi Tổ & Hôn Phối)" : gen === 2 ? "(9 Người Con)" : ""}
+                      </span>
+                      <span className="font-mono text-slate-600 font-semibold">
+                        {count} thành viên ({percent}%)
+                      </span>
+                    </div>
+
+                    <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-blue-600 h-full rounded-full transition-all"
+                        style={{ width: `${percent}%` }}
+                      ></div>
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {genMembers.map((m) => (
+                        <span
+                          key={m.id}
+                          className={`text-[10px] px-2 py-0.5 rounded-md border font-medium ${
+                            m.gender === "male"
+                              ? "bg-blue-50 text-blue-700 border-blue-200"
+                              : "bg-rose-50 text-rose-700 border-rose-200"
+                          }`}
+                        >
+                          {m.fullName}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: QUẢN LÝ TÀI KHOẢN ADMIN (/admin/users) */}
+      {activeTab === "admins" && (
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <UserCheck className="w-5 h-5 text-blue-600" />
+                <span>Danh Sách Quản Trị Viên Dòng Họ</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Các tài khoản có thẩm quyền phê duyệt hồ sơ và can thiệp trực tiếp vào dữ liệu gia phả.
+              </p>
+            </div>
+
+            {isSuperAdmin && (
+              <button
+                type="button"
+                onClick={() => setShowAddAdminModal(true)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>+ Thêm Admin Phụ</span>
+              </button>
+            )}
+          </div>
+
+          {/* Admin Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 uppercase text-[10px] font-bold">
+                  <th className="py-2.5 px-3">Họ và tên</th>
+                  <th className="py-2.5 px-3">Email đăng nhập</th>
+                  <th className="py-2.5 px-3">Vai trò</th>
+                  <th className="py-2.5 px-3">Ngày tạo</th>
+                  <th className="py-2.5 px-3">Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {adminUsers.map((u) => {
+                  const isSuper = u.role === "super_admin";
+                  return (
+                    <tr key={u.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="py-3 px-3 font-bold text-slate-900">{u.name}</td>
+                      <td className="py-3 px-3 font-mono text-slate-600">{u.email}</td>
+                      <td className="py-3 px-3">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${
+                            isSuper
+                              ? "bg-purple-100 text-purple-800 border border-purple-200"
+                              : "bg-blue-100 text-blue-800 border border-blue-200"
+                          }`}
+                        >
+                          {isSuper ? "Super Admin" : "Ban Trị Sự"}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-slate-500">{u.createdAt}</td>
+                      <td className="py-3 px-3">
+                        <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold text-[11px]">
+                          <BadgeCheck className="w-3.5 h-3.5" />
+                          <span>Đang hoạt động</span>
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Thêm Admin Phụ */}
+      {showAddAdminModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden">
+            <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-blue-400" />
+                <h3 className="font-bold text-sm">Thêm Tài Khoản Quản Trị Viên Phụ</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddAdminModal(false)}
+                className="text-white/80 hover:text-white"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateSubAdmin} className="p-5 space-y-3.5 text-xs">
+              {adminFormMsg && (
+                <div
+                  className={`p-2.5 rounded-lg border text-xs font-semibold ${
+                    adminFormMsg.type === "success"
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      : "bg-rose-50 text-rose-800 border-rose-200"
+                  }`}
+                >
+                  {adminFormMsg.text}
+                </div>
+              )}
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Họ và tên thành viên Ban Trị Sự *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Phan Quốc Tuấn"
+                  value={newAdminName}
+                  onChange={(e) => setNewAdminName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Email đăng nhập *
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="admin.tuan@tophan.vn"
+                  value={newAdminEmail}
+                  onChange={(e) => setNewAdminEmail(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Mật khẩu khởi tạo *
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Ít nhất 6 ký tự"
+                  value={newAdminPassword}
+                  onChange={(e) => setNewAdminPassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Vai trò quản trị
+                </label>
+                <select
+                  value={newAdminRole}
+                  onChange={(e) => setNewAdminRole(e.target.value as "admin" | "super_admin")}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="admin">Ban Trị Sự (Admin duyệt & sửa trực tiếp)</option>
+                  <option value="super_admin">Super Admin (Tổng quản trị)</option>
+                </select>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddAdminModal(false)}
+                  className="px-3.5 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 font-medium cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Tạo Tài Khoản</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

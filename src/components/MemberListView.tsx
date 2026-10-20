@@ -10,6 +10,8 @@ import {
   Baby,
   User,
   Users,
+  Phone,
+  MapPin,
 } from "lucide-react";
 import { Member } from "@/types/family";
 import { useFamilyStore } from "@/lib/family-store";
@@ -27,7 +29,7 @@ export default function MemberListView({
   onAddChild,
   onOpenAddMember,
 }: MemberListViewProps) {
-  const { members, getMember, deleteMember } = useFamilyStore();
+  const { members, getMember, deleteMemberDirect, isAdmin } = useFamilyStore();
 
   const [search, setSearch] = useState("");
   const [selectedGen, setSelectedGen] = useState<string>("ALL");
@@ -46,7 +48,9 @@ export default function MemberListView({
           const q = search.toLowerCase().trim();
           const matchName = m.fullName.toLowerCase().includes(q);
           const matchNick = m.nickname?.toLowerCase().includes(q);
-          return matchName || matchNick;
+          const matchPhone = m.phone && m.phone.includes(q);
+          const matchAddr = m.address && m.address.toLowerCase().includes(q);
+          return matchName || matchNick || matchPhone || matchAddr;
         }
         return true;
       })
@@ -69,7 +73,7 @@ export default function MemberListView({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm theo họ tên hoặc biệt danh..."
+            placeholder="Tìm theo tên, SĐT, biệt danh, nơi ở..."
             className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white"
           />
         </div>
@@ -105,10 +109,12 @@ export default function MemberListView({
           <button
             type="button"
             onClick={onOpenAddMember}
-            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            className={`px-3.5 py-2 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer ${
+              isAdmin ? "bg-slate-900 hover:bg-slate-800" : "bg-blue-600 hover:bg-blue-700"
+            }`}
           >
             <PlusCircle className="w-4 h-4" />
-            <span>Thêm Thành Viên</span>
+            <span>{isAdmin ? "+ Thêm Thành Viên (Trực Tiếp)" : "+ Đề Xuất Thành Viên"}</span>
           </button>
         </div>
       </div>
@@ -116,16 +122,16 @@ export default function MemberListView({
       {/* Table */}
       <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full text-left text-xs">
-          <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 uppercase text-[11px] tracking-wider">
+          <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 uppercase text-[10px] tracking-wider">
             <tr>
               <th className="py-3 px-3 w-12 text-center">STT</th>
               <th className="py-3 px-4">Họ và Tên</th>
               <th className="py-3 px-3">Giới tính</th>
               <th className="py-3 px-3">Thế hệ</th>
-              <th className="py-3 px-3">Thứ tự con</th>
+              <th className="py-3 px-3">Thứ tự</th>
               <th className="py-3 px-4">Sinh - Mất</th>
-              <th className="py-3 px-4">Cha / Mẹ</th>
-              <th className="py-3 px-4">Vợ / Chồng</th>
+              <th className="py-3 px-4">Số Điện Thoại & Nơi Ở</th>
+              <th className="py-3 px-4">Cha / Mẹ / Hôn Phối</th>
               <th className="py-3 px-3 text-right">Thao tác</th>
             </tr>
           </thead>
@@ -147,7 +153,7 @@ export default function MemberListView({
                   <tr
                     key={m.id}
                     onClick={() => onSelectMember(m)}
-                    className="hover:bg-slate-50 transition-colors cursor-pointer group"
+                    className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
                   >
                     <td className="py-3 px-3 text-center text-slate-400 font-mono">
                       {index + 1}
@@ -206,26 +212,36 @@ export default function MemberListView({
                       )}
                     </td>
 
-                    {/* Cha / Mẹ */}
+                    {/* SĐT & Nơi ở */}
                     <td className="py-3 px-4 text-slate-600">
-                      {father || mother ? (
-                        <div>
-                          {father && <div>Cha: {father.fullName}</div>}
-                          {mother && <div>Mẹ: {mother.fullName}</div>}
+                      {m.phone && (
+                        <div className="flex items-center gap-1 text-blue-700 font-mono font-medium">
+                          <Phone className="w-3 h-3 text-slate-400" />
+                          <span>{m.phone}</span>
                         </div>
-                      ) : (
-                        <span className="text-slate-400 italic">Tiên tổ</span>
+                      )}
+                      {m.address && (
+                        <div className="flex items-center gap-1 text-slate-500 text-[11px] truncate max-w-[180px]">
+                          <MapPin className="w-3 h-3 text-rose-500 shrink-0" />
+                          <span title={m.address}>{m.address}</span>
+                        </div>
+                      )}
+                      {!m.phone && !m.address && (
+                        <span className="text-slate-400 italic">Chưa cập nhật</span>
                       )}
                     </td>
 
-                    {/* Vợ / Chồng */}
+                    {/* Cha / Mẹ / Hôn phối */}
                     <td className="py-3 px-4 text-slate-600">
-                      {spouse ? (
-                        <span className="font-medium text-slate-800">
-                          {spouse.fullName}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400">---</span>
+                      {father && <div>Cha: {father.fullName}</div>}
+                      {mother && <div>Mẹ: {mother.fullName}</div>}
+                      {spouse && (
+                        <div className="text-slate-900 font-medium">
+                          Hôn phối: {spouse.fullName}
+                        </div>
+                      )}
+                      {!father && !mother && !spouse && (
+                        <span className="text-slate-400 italic">Khởi tổ</span>
                       )}
                     </td>
 
@@ -247,25 +263,17 @@ export default function MemberListView({
                           type="button"
                           onClick={() => onEditMember(m)}
                           className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
-                          title="Sửa"
+                          title="Sửa hồ sơ"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            if (
-                              confirm(
-                                `Bạn có chắc muốn xóa "${m.fullName}"?`
-                              )
-                            ) {
-                              deleteMember(m.id);
-                            }
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                          title="Xóa"
+                          onClick={() => onSelectMember(m)}
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                          title="Xem chi tiết hồ sơ"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <User className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </td>

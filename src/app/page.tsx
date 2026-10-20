@@ -9,37 +9,14 @@ import MemberDetailDrawer from "@/components/MemberDetailDrawer";
 import MemberFormModal, { QuickContext } from "@/components/MemberFormModal";
 import LoginModal from "@/components/LoginModal";
 import KinshipCalculatorModal from "@/components/KinshipCalculatorModal";
-import AnniversariesModal from "@/components/AnniversariesModal";
 import AnniversariesView from "@/components/AnniversariesView";
 import LotusFooter from "@/components/LotusFooter";
 import { Member } from "@/types/family";
 import { FamilyStoreProvider, useFamilyStore } from "@/lib/family-store";
 import { CheckCircle2, X, Compass, Sparkles } from "lucide-react";
 
-export interface CurrentUser {
-  id: string;
-  email: string;
-  name: string;
-  role: "ADMIN" | "BRANCH_MANAGER" | "MEMBER" | "GUEST";
-}
-
-const DEFAULT_GUEST: CurrentUser = {
-  id: "guest-id",
-  email: "guest@giaphaviet.vn",
-  name: "Khách Thăm Quan",
-  role: "GUEST",
-};
-
-const DEFAULT_ADMIN: CurrentUser = {
-  id: "admin-default",
-  email: "anhthuphan0102@gmail.com",
-  name: "Phan Anh Thư (Tổng Quản Trị)",
-  role: "ADMIN",
-};
-
 function HomePageContent() {
-  const { members } = useFamilyStore();
-  const [currentUser, setCurrentUser] = useState<CurrentUser>(DEFAULT_GUEST);
+  const { members, isAdmin } = useFamilyStore();
   const [activeTab, setActiveTab] = useState<string>("tree");
 
   // Selection & Focus
@@ -54,18 +31,15 @@ function HomePageContent() {
   // Other Modals
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showKinshipModal, setShowKinshipModal] = useState(false);
-  const [showAnniversariesModal, setShowAnniversariesModal] = useState(false);
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  const isAdmin = currentUser.role === "ADMIN";
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
-    }, 4000);
+    }, 5000);
   };
 
   // Quick Action Handlers
@@ -102,13 +76,13 @@ function HomePageContent() {
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between selection:bg-blue-600 selection:text-white">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center space-x-2 border border-slate-700 animate-in fade-in slide-in-from-bottom-2">
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center space-x-2 border border-slate-700 animate-in fade-in slide-in-from-bottom-2 max-w-md">
           <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-          <span className="text-xs font-medium">{toastMessage}</span>
+          <span className="text-xs font-medium leading-relaxed">{toastMessage}</span>
           <button
             type="button"
             onClick={() => setToastMessage(null)}
-            className="text-slate-400 hover:text-white ml-2"
+            className="text-slate-400 hover:text-white ml-2 shrink-0 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -119,19 +93,8 @@ function HomePageContent() {
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        currentUser={currentUser}
-        onSwitchRole={(role) => {
-          setCurrentUser(role === "ADMIN" ? DEFAULT_ADMIN : DEFAULT_GUEST);
-          showToast(
-            `Đã chuyển sang chế độ ${
-              role === "ADMIN" ? "Quản trị viên (Admin)" : "Khách thăm quan"
-            }`
-          );
-        }}
         onOpenLogin={() => setShowLoginModal(true)}
         onOpenAddMember={handleOpenAddMember}
-        onOpenAnniversaries={() => setShowAnniversariesModal(true)}
-        onOpenKinship={() => setShowKinshipModal(true)}
         onFocusMember={(id) => {
           setFocusedMemberId(id);
           const found = members.find((m) => m.id === id);
@@ -167,7 +130,7 @@ function HomePageContent() {
           </div>
         )}
 
-        {/* TAB 3: Lịch Lễ Giỗ */}
+        {/* TAB 3: Lịch Lễ Giỗ & Sự Kiện */}
         {activeTab === "anniversaries" && (
           <div className="max-w-7xl mx-auto px-4 py-6">
             <AnniversariesView isAdmin={isAdmin} />
@@ -206,11 +169,7 @@ function HomePageContent() {
           <div className="max-w-7xl mx-auto px-4 py-6">
             <AdminView
               onNavigateTab={setActiveTab}
-              onOpenCreateBranch={() => setActiveTab("admin")}
               onOpenAddMember={handleOpenAddMember}
-              onMemberApproved={() => {
-                showToast("Đã phê duyệt đề xuất thay đổi!");
-              }}
             />
           </div>
         )}
@@ -236,6 +195,7 @@ function HomePageContent() {
           setSelectedMember(null);
           handleQuickAddSpouse(spouse);
         }}
+        onShowToast={showToast}
       />
 
       {/* 2. Member Add/Edit Form Modal */}
@@ -248,6 +208,7 @@ function HomePageContent() {
         }}
         editingMember={editingMember}
         quickContext={quickContext}
+        onShowToast={showToast}
       />
 
       {/* 3. Login Modal */}
@@ -255,9 +216,7 @@ function HomePageContent() {
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
         onLoginSuccess={(user) => {
-          setCurrentUser(user);
-          setShowLoginModal(false);
-          showToast(`Đăng nhập thành công với vai trò ${user.role}!`);
+          showToast(`Đăng nhập thành công! Chào mừng Quản Trị Viên.`);
         }}
       />
 
@@ -266,14 +225,6 @@ function HomePageContent() {
         isOpen={showKinshipModal}
         onClose={() => setShowKinshipModal(false)}
         preselectedAId={selectedMember?.id}
-      />
-
-      {/* 5. Anniversaries Modal */}
-      <AnniversariesModal
-        isOpen={showAnniversariesModal}
-        onClose={() => setShowAnniversariesModal(false)}
-        isAdmin={isAdmin}
-        onOpenAddMember={handleOpenAddMember}
       />
     </div>
   );
