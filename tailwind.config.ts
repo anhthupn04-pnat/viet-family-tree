@@ -52,9 +52,9 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],
-        mono: ["var(--font-geist-mono)", "monospace"],
-        serif: ["Merriweather", "Georgia", "serif"],
+        sans: ["'Be Vietnam Pro'", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+        mono: ["monospace"],
+        serif: ["'Playfair Display'", "'Merriweather'", "Georgia", "serif"],
       },
       boxShadow: {
         'traditional': '0 4px 20px -2px rgba(139, 30, 30, 0.08), 0 2px 6px -1px rgba(0, 0, 0, 0.04)',

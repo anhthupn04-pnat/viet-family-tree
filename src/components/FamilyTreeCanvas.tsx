@@ -89,10 +89,16 @@ interface FamilyTreeCanvasProps {
 }
 
 // Stylized Golden Royal Dragon (Rồng Vàng Hoàng Kim chầu phụng)
-const GoldenDragon = ({ flip = false }: { flip?: boolean }) => (
+const GoldenDragon = ({
+  flip = false,
+  className = "w-12 h-8 sm:w-16 sm:h-10",
+}: {
+  flip?: boolean;
+  className?: string;
+}) => (
   <svg
     viewBox="0 0 160 100"
-    className={`w-16 h-11 sm:w-24 sm:h-16 text-[#E0A926] shrink-0 drop-shadow-md transition-transform ${
+    className={`${className} text-[#E0A926] shrink-0 drop-shadow-md transition-transform ${
       flip ? "scale-x-[-1]" : ""
     }`}
     fill="currentColor"
@@ -120,35 +126,14 @@ const GoldenDragon = ({ flip = false }: { flip?: boolean }) => (
   </svg>
 );
 
-// Vertical Red Scroll Couplet (Câu đối đỏ hai bên cuốn thư)
-const VerticalScroll = ({ text, position }: { text: string; position: "left" | "right" }) => {
-  const characters = text.split("");
-  return (
-    <div
-      className={`hidden lg:flex flex-col items-center py-2 px-1 rounded-sm shadow-md border border-[#E0A926] bg-[#C62828] text-white z-10 w-7 shrink-0 ${
-        position === "left" ? "mr-2" : "ml-2"
-      }`}
-    >
-      <div className="w-9 h-1.5 bg-gradient-to-r from-[#D97706] via-[#FADB7F] to-[#D97706] rounded-sm -mt-2.5 border border-[#92400E] shadow-2xs"></div>
-      <div className="flex flex-col items-center justify-around flex-1 py-1 space-y-1 font-serif text-[9px] font-bold text-[#FADB7F] tracking-widest select-none">
-        {characters.map((char, index) => (
-          <span key={index} className="leading-tight block">
-            {char}
-          </span>
-        ))}
-      </div>
-      <div className="w-9 h-1.5 bg-gradient-to-r from-[#D97706] via-[#FADB7F] to-[#D97706] rounded-sm -mb-2.5 border border-[#92400E] shadow-2xs"></div>
-    </div>
-  );
-};
-
-// Layout geometry constants
-const CARD_WIDTH = 192;
-const CARD_HEIGHT = 128;
-const SPOUSE_GAP = 12;
-const SIBLING_GAP = 36;
+// Layout geometry constants - optimized for clean breathing room & zero collision
+const CARD_WIDTH = 210;
+const CARD_HEIGHT = 136;
+const SPOUSE_GAP = 28;
+const SIBLING_GAP = 42;
 const ROW_GAP = 96;
-const ROW_START_Y = 175;
+const ROW_START_Y = 130;
+const START_X = 130;
 
 export default function FamilyTreeCanvas({
   onSelectMember,
@@ -448,7 +433,7 @@ export default function FamilyTreeCanvas({
       u.children.forEach((c) => shiftSubtree(c, delta));
     };
 
-    let startX = 60;
+    let startX = START_X;
     rootUnitsList.forEach((ru) => {
       assignCoords(ru, startX);
       startX += ru.subtreeWidth + 40;
@@ -567,6 +552,7 @@ export default function FamilyTreeCanvas({
   };
 
   // Render individual member card
+  // Render individual member card
   const renderCard = (member: MemberNode, isSpouse = false, partnerName?: string) => {
     const isHighlighted = highlightedMemberId === member.id;
     const isFemale = member.gender === "FEMALE";
@@ -585,18 +571,20 @@ export default function FamilyTreeCanvas({
           handleCardClick(member);
         }}
         style={{ width: `${CARD_WIDTH}px`, height: `${CARD_HEIGHT}px` }}
-        className={`rounded-2xl p-2.5 cursor-pointer transition-all duration-200 border-2 relative flex flex-col justify-between shadow-md select-none ${
+        className={`rounded-2xl p-3 cursor-pointer transition-all duration-200 border-2 relative flex flex-col justify-between shadow-md select-none ${
           isNodeA
             ? "ring-4 ring-[#E0A926] shadow-2xl border-[#E0A926] scale-105 z-30"
             : isNodeB
             ? "ring-4 ring-[#F06292] shadow-2xl border-[#F06292] scale-105 z-30"
             : isHighlighted
             ? "ring-4 ring-[#E0A926] shadow-xl border-[#E0A926] scale-105 z-20"
+            : isFemale
+            ? "border-[#F472B6]/40 hover:border-[#F472B6] hover:shadow-xl hover:scale-102"
             : "border-[#E0A926]/40 hover:border-[#E0A926] hover:shadow-xl hover:scale-102"
         } ${
           isFemale
-            ? "bg-gradient-to-br from-[#8B3A4A] via-[#9C274E] to-[#681313] text-pink-50"
-            : "bg-gradient-to-br from-[#1B5E4F] via-[#246B5C] to-[#124237] text-white"
+            ? "bg-gradient-to-br from-[#7D193E] via-[#631432] to-[#450D22] text-pink-50"
+            : "bg-gradient-to-br from-[#165649] via-[#104339] to-[#0B2F28] text-white"
         }`}
       >
         {/* Kinship Badge overlay */}
@@ -612,13 +600,13 @@ export default function FamilyTreeCanvas({
         )}
 
         {/* Top Header: Avatar + Status + Birth Order */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-1.5">
+        <div className="flex items-center justify-between gap-1">
+          <div className="flex items-center space-x-1.5 min-w-0">
             <div
               className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-[11px] shadow-xs overflow-hidden shrink-0 ${
                 isFemale
-                  ? "border-2 border-[#F06292] bg-pink-950/70 text-pink-200"
-                  : "border-2 border-[#E0A926] bg-emerald-950/70 text-amber-200"
+                  ? "border-2 border-[#F06292] bg-pink-950/80 text-pink-200"
+                  : "border-2 border-[#E0A926] bg-emerald-950/80 text-amber-200"
               }`}
             >
               {member.avatarUrl ? (
@@ -634,57 +622,58 @@ export default function FamilyTreeCanvas({
 
             {/* Birth order badge */}
             {member.birthOrder && (
-              <span className="text-[8px] font-bold px-1.5 py-0.2 rounded-md bg-amber-400/20 text-amber-200 border border-amber-300/30 whitespace-nowrap">
+              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-200 border border-amber-300/30 truncate">
                 {member.birthOrder}
               </span>
             )}
           </div>
 
           {/* Right badges: Martyr Star or Lotus Deceased or Alive */}
-          <div className="flex items-center space-x-1">
+          <div className="flex items-center shrink-0">
             {isMartyr ? (
               <span
-                className="bg-red-600 text-amber-200 border border-amber-300 text-[8px] font-black px-1.5 py-0.2 rounded-full flex items-center space-x-0.5 shadow-2xs"
+                className="bg-red-600 text-amber-200 border border-amber-300 text-[8.5px] font-black px-1.5 py-0.5 rounded-full flex items-center space-x-0.5 shadow-2xs"
                 title="Liệt sĩ Quân đội Nhân dân Việt Nam"
               >
-                <Star className="w-2.5 h-2.5 fill-amber-300 text-amber-300" />
-                <span>LS</span>
+                <Star className="w-2.5 h-2.5 fill-amber-300 text-amber-300 shrink-0" />
+                <span>Liệt sĩ</span>
               </span>
             ) : !member.isAlive ? (
               <span
-                className="bg-black/35 text-amber-200 border border-[#E0A926]/40 text-[8px] font-bold px-1.5 py-0.2 rounded-full flex items-center space-x-0.5"
+                className="bg-black/40 text-amber-200 border border-[#E0A926]/40 text-[8.5px] font-bold px-1.5 py-0.5 rounded-full flex items-center space-x-0.5"
                 title="Đã quy tiên (mất)"
               >
-                <Flower2 className="w-2.5 h-2.5 text-[#F06292]" />
-                <span>Mất</span>
+                <Flower2 className="w-2.5 h-2.5 text-[#F06292] shrink-0" />
+                <span>Đã mất</span>
               </span>
             ) : (
               <span
-                className="bg-emerald-400/20 text-emerald-200 border border-emerald-400/40 text-[8px] font-bold px-1.5 py-0.2 rounded-full"
+                className="bg-emerald-400/20 text-emerald-200 border border-emerald-400/40 text-[8.5px] font-bold px-2 py-0.5 rounded-full flex items-center space-x-1"
                 title="Còn sống"
               >
-                Sống
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
+                <span>Còn sống</span>
               </span>
             )}
           </div>
         </div>
 
-        {/* Member Full Name & Courtesy */}
+        {/* Member Full Name (Clean sans typography - flawless Vietnamese diacritics) */}
         <div className="text-center my-0.5">
-          <h4 className="font-serif font-bold text-xs text-white tracking-wide uppercase line-clamp-1">
+          <h4 className="font-sans font-bold text-[13px] text-white tracking-normal uppercase line-clamp-1 leading-snug drop-shadow-xs">
             {member.fullName}
           </h4>
           {member.courtesyName && (
-            <p className="text-[9px] text-[#FADB7F] italic line-clamp-1">
+            <p className="text-[9.5px] text-[#FADB7F] italic line-clamp-1 -mt-0.5">
               {member.courtesyName}
             </p>
           )}
         </div>
 
         {/* Footer Details: Years & Branch info */}
-        <div className="pt-1 border-t border-white/20 text-[9px] text-center space-y-0.5">
-          <p className="text-[9px] text-amber-200 font-mono font-semibold">
-            {member.birthSolar?.slice(0, 4) || "--"} -{" "}
+        <div className="pt-1 border-t border-white/15 text-[9px] text-center space-y-0.5">
+          <p className="text-[9.5px] text-amber-200 font-mono font-semibold">
+            {member.birthSolar?.slice(0, 4) || "--"} —{" "}
             {member.isAlive ? "nay" : member.deathSolar?.slice(0, 4) || "--"}
           </p>
           <p className="line-clamp-1 text-[8.5px] text-emerald-100/80">
@@ -709,17 +698,23 @@ export default function FamilyTreeCanvas({
           width: `${unit.width}px`,
           height: `${CARD_HEIGHT}px`,
         }}
-        className="flex items-center space-x-2.5 z-10"
+        className="flex items-center z-10"
       >
         {renderCard(unit.primary)}
 
         {unit.spouse && (
-          <div className="flex items-center -mx-1 shrink-0 z-20">
+          <div
+            style={{ width: `${SPOUSE_GAP}px` }}
+            className="flex items-center justify-center shrink-0 relative"
+          >
+            {/* Horizontal marriage connection line */}
+            <div className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-[#E0A926]/40 via-[#E0A926] to-[#E0A926]/40"></div>
+            {/* Heart medallion */}
             <div
-              className="w-5 h-5 rounded-full bg-[#E0A926] border border-white flex items-center justify-center text-[#24150B] shadow-sm"
-              title="Quan hệ Hôn phối"
+              className="w-6 h-6 rounded-full bg-gradient-to-br from-[#C62828] via-[#B71C1C] to-[#8E1515] border border-amber-300 text-white flex items-center justify-center shadow-md relative z-10"
+              title="Quan hệ Hôn phối (Vợ Chồng)"
             >
-              <Heart className="w-2.5 h-2.5 fill-current text-[#C62828]" />
+              <Heart className="w-3 h-3 fill-current text-amber-200" />
             </div>
           </div>
         )}
@@ -1086,51 +1081,62 @@ export default function FamilyTreeCanvas({
             }}
             className="absolute top-0 left-0 transition-transform duration-75"
           >
-            {/* TRADITIONAL ROYAL BANNER (Cuốn thư phả hệ đại tông) */}
-            <div className="absolute left-[380px] top-6 flex items-center justify-center z-10 pointer-events-auto">
-              <VerticalScroll text="TổTiênCôngĐứcThiênNiênThịnh" position="left" />
-              <GoldenDragon flip={false} />
-
-              {/* Scroll Body */}
-              <div className="relative mx-3 bg-gradient-to-r from-[#8B1E1E] via-[#A91B1B] to-[#8B1E1E] text-white px-7 py-3 rounded-2xl shadow-xl border-2 border-[#E0A926] text-center min-w-[340px]">
-                <div className="flex items-center justify-center space-x-1.5 mb-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#E0A926]"></span>
-                  <span className="text-[10px] tracking-widest text-[#FADB7F] uppercase font-bold">
-                    Sơ Đồ Phả Hệ Trực Hệ
-                  </span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#E0A926]"></span>
+            {/* TRADITIONAL ROYAL BANNER (Cuốn thư phả hệ đại tông - Centered cleanly above tree) */}
+            <div
+              style={{
+                position: "absolute",
+                left: `${(() => {
+                  if (allRenderUnits.length === 0) return 600;
+                  const minX = Math.min(...allRenderUnits.map((u) => u.x));
+                  const maxX = Math.max(...allRenderUnits.map((u) => u.x + u.width));
+                  return (minX + maxX) / 2;
+                })()}px`,
+                transform: "translateX(-50%)",
+                top: "16px",
+              }}
+              className="flex items-center justify-center z-10 pointer-events-auto select-none"
+            >
+              <div className="flex items-center space-x-2 sm:space-x-3 bg-gradient-to-r from-[#8E1515] via-[#B71C1C] to-[#8E1515] text-white px-5 py-2 rounded-2xl shadow-xl border-2 border-[#E0A926] backdrop-blur-xs">
+                <GoldenDragon flip={false} className="w-10 h-7 text-[#E0A926]" />
+                <div className="text-center px-2">
+                  <div className="flex items-center justify-center space-x-1.5 mb-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#E0A926]"></span>
+                    <span className="text-[9px] tracking-widest text-[#FADB7F] uppercase font-bold">
+                      Sơ Đồ Phả Hệ Trực Hệ
+                    </span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#E0A926]"></span>
+                  </div>
+                  <h2 className="text-base sm:text-lg font-serif font-black text-[#FADB7F] tracking-wide drop-shadow-xs">
+                    {clanName}
+                  </h2>
+                  <p className="text-[10px] text-amber-100/90 italic font-serif">
+                    Khởi Tổ: Cụ Phan Thạnh — Truyền Thừa Hậu Duệ Trực Hệ
+                  </p>
                 </div>
-                <h2 className="text-xl sm:text-2xl font-serif font-black text-[#FADB7F] tracking-wide drop-shadow-sm">
-                  {clanName}
-                </h2>
-                <p className="text-[11px] text-amber-100/90 italic font-serif mt-0.5">
-                  Cụ Khởi Tổ Phan Thạnh — Truyền Thừa Hậu Duệ Trực Hệ
-                </p>
+                <GoldenDragon flip={true} className="w-10 h-7 text-[#E0A926]" />
               </div>
-
-              <GoldenDragon flip={true} />
-              <VerticalScroll text="TửHiếuTônHiềnVạnĐạiVinh" position="right" />
             </div>
 
             {/* LEFT GENERATION RAIL BADGES (Đời I, Đời II, Đời III) */}
             <div className="absolute left-6 top-0 bottom-0 pointer-events-none z-20">
               {Array.from({ length: maxGeneration }, (_, i) => i + 1).map((genNum) => {
                 const badgeY = ROW_START_Y + (genNum - 1) * (CARD_HEIGHT + ROW_GAP);
+                const centerY = badgeY + CARD_HEIGHT / 2;
                 return (
                   <div
                     key={genNum}
                     style={{
                       position: "absolute",
                       left: "0px",
-                      top: `${badgeY + CARD_HEIGHT / 2 - 28}px`,
+                      top: `${centerY - 26}px`,
                     }}
-                    className="flex flex-col items-center justify-center w-14"
+                    className="flex flex-col items-center justify-center w-16"
                   >
-                    <div className="w-12 h-12 rounded-full bg-[#1E5F52] border-2 border-[#E0A926] shadow-md flex items-center justify-center text-white font-serif font-black text-xs hover:scale-105 transition-transform">
+                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#1E5F52] to-[#124237] border-2 border-[#E0A926] shadow-md flex items-center justify-center text-[#FADB7F] font-serif font-black text-sm hover:scale-105 transition-transform">
                       {romanGenerations[genNum] || genNum}
                     </div>
-                    <span className="text-[9.5px] font-bold text-[#1E5F52] mt-0.5 font-serif bg-[#FCFBF7] px-1.5 py-0.2 rounded-sm border border-[#1E5F52]/30 shadow-2xs">
-                      Đời {genNum}
+                    <span className="text-[9.5px] font-bold text-[#1E5F52] mt-1 font-serif bg-[#FCFBF7] px-2 py-0.5 rounded-full border border-[#1E5F52]/30 shadow-2xs whitespace-nowrap">
+                      Đời {romanGenerations[genNum] || genNum}
                     </span>
                   </div>
                 );
@@ -1147,6 +1153,25 @@ export default function FamilyTreeCanvas({
                   <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#E0A926" floodOpacity="0.8" />
                 </filter>
               </defs>
+
+              {/* Faint generational horizontal guide lines */}
+              {Array.from({ length: maxGeneration }, (_, i) => i + 1).map((genNum) => {
+                const rowY = ROW_START_Y + (genNum - 1) * (CARD_HEIGHT + ROW_GAP);
+                const centerY = rowY + CARD_HEIGHT / 2;
+                return (
+                  <line
+                    key={`guide-${genNum}`}
+                    x1="80"
+                    y1={centerY}
+                    x2="3500"
+                    y2={centerY}
+                    stroke="#E8DEC7"
+                    strokeDasharray="4 8"
+                    strokeWidth="1"
+                    opacity="0.6"
+                  />
+                );
+              })}
 
               {connectors.map((conn, idx) => (
                 <g key={`${conn.parentId}-${conn.childId}-${idx}`}>
@@ -1167,6 +1192,8 @@ export default function FamilyTreeCanvas({
                       cy={conn.midY}
                       r="3"
                       fill="#2E7D68"
+                      stroke="#FCFBF7"
+                      strokeWidth="1"
                     />
                   )}
                 </g>
