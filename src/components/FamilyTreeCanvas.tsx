@@ -37,6 +37,7 @@ import {
   printOrExportA0,
 } from "@/lib/exportUtils";
 import { MOCK_MEMBERS } from "@/lib/mockData";
+import { getLocalMembers, mergeServerWithLocal } from "@/lib/treeStorage";
 
 export interface MemberNode {
   id: string;
@@ -199,6 +200,15 @@ export default function FamilyTreeCanvas({
     return () => document.removeEventListener("mousedown", handleOutside);
   }, []);
 
+  // Tải tức thì từ localStorage khi khởi tạo component để tránh bị load lại từ đầu
+  useEffect(() => {
+    const cached = getLocalMembers();
+    if (cached && cached.length > 0) {
+      setMembers(cached);
+      setLoading(false);
+    }
+  }, []);
+
   // Optimistically inject or update newly saved member for zero latency
   useEffect(() => {
     if (!latestSavedMember) return;
@@ -236,7 +246,7 @@ export default function FamilyTreeCanvas({
     });
   }, [latestSavedMember]);
 
-  // Fetch tree and branches data with cache-busting timestamp
+  // Fetch tree and branches data with cache-busting timestamp and merge with localStorage
   const loadTree = async () => {
     try {
       setLoading(true);
@@ -252,18 +262,22 @@ export default function FamilyTreeCanvas({
       const dataTree = await resTree.json();
       const dataBranches = await resBranches.json();
 
-      if (dataTree.members && dataTree.members.length > 0) {
-        setMembers(dataTree.members);
-      } else {
-        setMembers(MOCK_MEMBERS as any[]);
-      }
+      const rawList = dataTree.members && dataTree.members.length > 0 ? dataTree.members : (MOCK_MEMBERS as any[]);
+      // Hợp nhất dữ liệu server với các thay đổi/xóa đã lưu trong localStorage
+      const mergedMembers = mergeServerWithLocal(rawList);
+      setMembers(mergedMembers);
 
       if (dataBranches.branches) {
         setBranches(dataBranches.branches);
       }
     } catch (e) {
-      console.warn("Tree load error, using mockData fallback:", e);
-      setMembers(MOCK_MEMBERS as any[]);
+      console.warn("Tree load error, using local/mockData fallback:", e);
+      const cached = getLocalMembers();
+      if (cached && cached.length > 0) {
+        setMembers(cached);
+      } else {
+        setMembers(mergeServerWithLocal(MOCK_MEMBERS as any[]));
+      }
     } finally {
       setLoading(false);
     }

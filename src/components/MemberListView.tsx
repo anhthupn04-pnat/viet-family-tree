@@ -13,6 +13,7 @@ import {
   Phone,
   Compass,
 } from "lucide-react";
+import { getLocalMembers, mergeServerWithLocal } from "@/lib/treeStorage";
 
 interface MemberListViewProps {
   onSelectMember: (member: any) => void;
@@ -45,6 +46,15 @@ export default function MemberListView({
   const [gender, setGender] = useState("ALL");
   const [isAlive, setIsAlive] = useState("ALL");
 
+  // Tải tức thì từ localStorage khi khởi tạo component
+  useEffect(() => {
+    const local = getLocalMembers();
+    if (local && local.length > 0) {
+      setMembers(local);
+      setLoading(false);
+    }
+  }, []);
+
   const fetchMembers = async () => {
     try {
       setLoading(true);
@@ -62,10 +72,32 @@ export default function MemberListView({
       });
       const data = await res.json();
       if (data.members) {
-        setMembers(data.members);
+        // Hợp nhất dữ liệu server với các chỉnh sửa và xóa đã lưu ở localStorage
+        const merged = mergeServerWithLocal(data.members);
+        let filtered = merged;
+        if (query) {
+          const q = query.toLowerCase();
+          filtered = filtered.filter(
+            (m) =>
+              m.fullName?.toLowerCase().includes(q) ||
+              m.courtesyName?.toLowerCase().includes(q)
+          );
+        }
+        if (branchId !== "ALL") filtered = filtered.filter((m) => m.branchId === branchId);
+        if (generation !== "ALL") filtered = filtered.filter((m) => m.generation === Number(generation));
+        if (gender !== "ALL") filtered = filtered.filter((m) => m.gender === gender);
+        if (isAlive !== "ALL") {
+          const aliveBool = isAlive === "true";
+          filtered = filtered.filter((m) => m.isAlive === aliveBool);
+        }
+        setMembers(filtered);
       }
     } catch (e) {
       console.error(e);
+      const local = getLocalMembers();
+      if (local && local.length > 0) {
+        setMembers(local);
+      }
     } finally {
       setLoading(false);
     }

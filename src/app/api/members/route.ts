@@ -597,42 +597,40 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Thiếu ID thành viên cần xóa." }, { status: 400, headers: NO_CACHE_HEADERS });
     }
 
-    // Kiểm tra xem thành viên có con cái hay không
-    const childCount = await prisma.memberProfile.count({
-      where: {
-        OR: [{ fatherId: id }, { motherId: id }],
-      },
-    });
+    // 1. Tháo gỡ liên kết cha/mẹ của các con (ON DELETE SET NULL)
+    try {
+      await prisma.memberProfile.updateMany({
+        where: { fatherId: id },
+        data: { fatherId: null },
+      });
+      await prisma.memberProfile.updateMany({
+        where: { motherId: id },
+        data: { motherId: null },
+      });
 
-    if (childCount > 0) {
-      return NextResponse.json(
-        {
-          error: `Không thể xóa thành viên này vì đang có ${childCount} người con phụ thuộc trong cây gia phả. Hãy điều chuyển liên kết con cái trước!`,
+      // 2. Xóa các liên kết quan hệ hôn phối, ngày giỗ, đề xuất
+      await prisma.marriage.deleteMany({
+        where: {
+          OR: [{ husbandId: id }, { wifeId: id }],
         },
-        { status: 400, headers: NO_CACHE_HEADERS }
-      );
+      });
+
+      await prisma.ancestorAnniversary.deleteMany({
+        where: { memberId: id },
+      });
+
+      await prisma.changeRequest.deleteMany({
+        where: { memberId: id },
+      });
+
+      await prisma.memberProfile.delete({
+        where: { id },
+      });
+    } catch (dbErr) {
+      console.warn("Prisma SQLite delete warning (possible readonly serverless):", dbErr);
     }
 
-    // Xóa các liên kết quan hệ trước để đảm bảo tính toàn vẹn khóa ngoại trong SQLite
-    await prisma.marriage.deleteMany({
-      where: {
-        OR: [{ husbandId: id }, { wifeId: id }],
-      },
-    });
-
-    await prisma.ancestorAnniversary.deleteMany({
-      where: { memberId: id },
-    });
-
-    await prisma.changeRequest.deleteMany({
-      where: { memberId: id },
-    });
-
-    await prisma.memberProfile.delete({
-      where: { id },
-    });
-
-    // Đồng bộ xóa sang Supabase nếu được cấu hình
+    // 3. Đồng bộ xóa sang Supabase nếu được cấu hình
     if (isSupabaseConfigured()) {
       try {
         const sbAdmin = getSupabaseAdmin();

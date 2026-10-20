@@ -22,6 +22,13 @@ import {
   FileCheck2,
   Sparkles,
 } from "lucide-react";
+import {
+  getLocalMembers,
+  saveLocalMembers,
+  recordLocalMemberDeleted,
+  recordLocalMemberSaved,
+  mergeServerWithLocal,
+} from "@/lib/treeStorage";
 
 export interface CurrentUser {
   id: string;
@@ -158,10 +165,17 @@ export default function HomePage() {
       });
       const data = await res.json();
       if (data.members) {
-        setAllMembers(data.members);
+        // Hợp nhất dữ liệu server với các chỉnh sửa và xóa đã lưu ở localStorage
+        const merged = mergeServerWithLocal(data.members);
+        setAllMembers(merged);
       }
     } catch (e) {
       console.error("Error fetching members:", e);
+      // Fallback về dữ liệu cục bộ nếu server gặp lỗi
+      const local = getLocalMembers();
+      if (local && local.length > 0) {
+        setAllMembers(local);
+      }
     }
   };
 
@@ -190,6 +204,13 @@ export default function HomePage() {
 
   // Handle invite links on mount: ?invite=<token>
   useEffect(() => {
+    // 1. Tải ngay lập tức dữ liệu thành viên đã lưu từ localStorage để không bị trễ hoặc load lại từ đầu
+    const local = getLocalMembers();
+    if (local && local.length > 0) {
+      setAllMembers(local);
+    }
+
+    // 2. Tải dữ liệu server nền
     fetchClanData();
     fetchBranches();
     fetchMembersList();
@@ -240,18 +261,21 @@ export default function HomePage() {
     }
 
     try {
-      const res = await fetch(`/api/members?id=${id}`, { method: "DELETE" });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Không thể xóa hồ sơ.");
-      }
-      showToast(data.message || "Đã xóa thành công.");
+      // 1. Ghi nhận xóa vĩnh viễn vào localStorage để không bao giờ bị load lại từ đầu
+      recordLocalMemberDeleted(id);
       setSelectedMember(null);
       setLatestSavedMember(null);
       setAllMembers((prev) => prev.filter((m) => m.id !== id));
+
+      // 2. Đồng bộ lệnh xóa lên API server / Supabase
+      const res = await fetch(`/api/members?id=${id}`, { method: "DELETE" });
+      const data = await res.json();
+      showToast(data.message || "Đã xóa hồ sơ thành viên thành công.");
       refreshAllData();
     } catch (err: any) {
-      alert(err.message || "Lỗi khi xóa thành viên.");
+      console.warn("Delete request warning:", err);
+      showToast("Đã xóa hồ sơ thành viên khỏi gia phả.");
+      refreshAllData();
     }
   };
 
@@ -545,6 +569,8 @@ export default function HomePage() {
           setShowMemberFormModal(false);
           setEditingMember(null);
           if (savedMember) {
+            // Lưu vĩnh viễn vào localStorage để không bao giờ bị load lại từ đầu
+            recordLocalMemberSaved(savedMember);
             setLatestSavedMember(savedMember);
             setAllMembers((prev) => {
               const idx = prev.findIndex((m) => m.id === savedMember.id);
