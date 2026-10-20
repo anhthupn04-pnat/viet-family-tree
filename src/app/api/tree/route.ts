@@ -6,10 +6,16 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const branchId = searchParams.get("branchId");
 
-    const where: any = {};
+    const where: any = {
+      status: { notIn: ["pending", "rejected"] },
+    };
     if (branchId && branchId !== "ALL") {
       // Nếu lọc theo chi nhánh, lấy cả Khởi Tổ (đời 1) và các thành viên của chi đó
-      where.OR = [{ branchId }, { generation: 1 }];
+      where.AND = [
+        { status: { notIn: ["pending", "rejected"] } },
+        { OR: [{ branchId }, { generation: 1 }] }
+      ];
+      delete where.status;
     }
 
     const members = await prisma.memberProfile.findMany({

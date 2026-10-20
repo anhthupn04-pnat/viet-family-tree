@@ -54,16 +54,18 @@ export default function KinshipCalculatorModal({
             birthSolar: m.birthSolar,
           }));
           setMembers(list);
-
-          // Default selection if not preselected
-          if (!preselectedAId && list.length >= 2) {
-            setMemberAId(list[list.length - 2].id); // Phan Quốc Bảo
-            setMemberBId(list[list.length - 1].id); // Phan Anh Thư
-          }
         }
       })
       .catch(console.error);
-  }, [preselectedAId]);
+  }, []);
+
+  useEffect(() => {
+    if (preselectedAId) setMemberAId(preselectedAId);
+    if (preselectedBId) setMemberBId(preselectedBId);
+    if (preselectedAId && preselectedBId && isOpen) {
+      handleCalculate(preselectedAId, preselectedBId);
+    }
+  }, [preselectedAId, preselectedBId, isOpen]);
 
   const handleCalculate = async (aId = memberAId, bId = memberBId) => {
     if (!aId || !bId) {

@@ -10,6 +10,7 @@ interface MemberFormModalProps {
   editingMember?: any | null;
   branches: any[];
   allMembers: any[];
+  isAdmin?: boolean;
 }
 
 export default function MemberFormModal({
@@ -19,6 +20,7 @@ export default function MemberFormModal({
   editingMember,
   branches,
   allMembers,
+  isAdmin = false,
 }: MemberFormModalProps) {
   const [fullName, setFullName] = useState("");
   const [courtesyName, setCourtesyName] = useState("");
@@ -39,6 +41,8 @@ export default function MemberFormModal({
   const [avatarUrl, setAvatarUrl] = useState("");
   const [phone, setPhone] = useState("");
   const [biography, setBiography] = useState("");
+  const [submitterName, setSubmitterName] = useState("");
+  const [submitterNote, setSubmitterNote] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -122,6 +126,9 @@ export default function MemberFormModal({
         avatarUrl: avatarUrl || null,
         phone: phone || null,
         biography: biography || null,
+        isAdmin,
+        submitterName: submitterName || null,
+        submitterNote: submitterNote || null,
       };
 
       const res = await fetch(url, {
@@ -134,6 +141,8 @@ export default function MemberFormModal({
       if (!res.ok) {
         throw new Error(data.error || "Không thể lưu hồ sơ thành viên.");
       }
+
+      alert(data.message || (isAdmin ? "Đã lưu thành công!" : "Đề xuất đã được gửi tới Ban Quản Trị!"));
 
       onSuccess();
       onClose();
@@ -433,6 +442,46 @@ export default function MemberFormModal({
               className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg"
             />
           </div>
+
+          {/* Chế độ đóng góp cộng đồng */}
+          {!isAdmin && !editingMember && (
+            <div className="bg-[#FAF7EE] border border-[#E0A926]/40 p-3.5 rounded-xl text-xs space-y-3">
+              <div className="flex items-center space-x-1.5 text-[#1E5F52] font-bold">
+                <Sparkles className="w-4 h-4 text-[#E0A926]" />
+                <span>Quy trình đề xuất thành viên mới (Chờ duyệt):</span>
+              </div>
+              <p className="text-[11px] text-stone-600">
+                Hồ sơ thành viên do bạn gửi sẽ mặc định ở trạng thái <strong>Chờ Ban Quản Trị phê duyệt</strong>. Sau khi Admin kiểm tra và duyệt, hồ sơ mới chính thức xuất hiện trên cây gia phả.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block text-[11px] font-semibold text-stone-700 mb-1">
+                    Họ tên của bạn (Người gửi đề xuất) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={submitterName}
+                    onChange={(e) => setSubmitterName(e.target.value)}
+                    placeholder="Ví dụ: Phan Quốc Bảo"
+                    className="w-full px-2.5 py-1.5 text-xs border border-stone-300 rounded-lg bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-stone-700 mb-1">
+                    Nguồn tư liệu minh chứng / Ghi chú
+                  </label>
+                  <input
+                    type="text"
+                    value={submitterNote}
+                    onChange={(e) => setSubmitterNote(e.target.value)}
+                    placeholder="Theo gia phả chép tay, sổ hộ khẩu..."
+                    className="w-full px-2.5 py-1.5 text-xs border border-stone-300 rounded-lg bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Footer buttons */}
           <div className="pt-3 flex items-center justify-end space-x-2 border-t border-stone-100">

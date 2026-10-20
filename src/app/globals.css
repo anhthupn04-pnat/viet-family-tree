@@ -25,13 +25,13 @@ body {
   overflow-x: hidden;
 }
 
-/* Hoa văn hoa sen & sóng nước truyền thống Việt Nam dạng chìm (subtle watermark) */
+/* Nền chính ngà sáng (#FCFBF7) với hoa văn Trống Đồng Đông Sơn, Chim Hạc & Vân Mây chìm mờ */
 .bg-lotus-watermark {
-  background-color: #FDFBF7;
+  background-color: #FCFBF7;
   background-image: 
-    radial-gradient(#E8DEC7 0.8px, transparent 0.8px),
-    url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%232B7A6A' fill-opacity='0.035' fill-rule='evenodd'%3E%3Cpath d='M60 20c-8 12-16 26-16 38 0 12 7 22 16 22s16-10 16-22c0-12-8-26-16-38zm-12 18c-10 8-20 20-20 30 0 10 6 18 14 18 6 0 12-6 15-14-3-12-6-24-9-34zm24 0c3 10 6 22 9 34 3 8 9 14 15 14 8 0 14-8 14-18 0-10-10-22-20-30zM30 84c6-4 14-4 20 0 6 4 14 4 20 0 6-4 14-4 20 0v2c-6 4-14 4-20 0-6-4-14-4-20 0-6 4-14 4-20 0v-2z'/%3E%3C/g%3E%3C/svg%3E");
-  background-size: 24px 24px, 120px 120px;
+    radial-gradient(#E8DEC7 0.75px, transparent 0.75px),
+    url("data:image/svg+xml,%3Csvg width='180' height='180' viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%232B7A6A' fill-opacity='0.055' fill-rule='evenodd'%3E%3C!-- Trống đồng Đông Sơn: Mặt trời 12 tia --%3E%3Ccircle cx='90' cy='90' r='14' fill='none' stroke='%232B7A6A' stroke-width='1.5' stroke-opacity='0.06'/%3E%3Cpath d='M90 70 L93 84 L90 82 L87 84 Z M90 110 L93 96 L90 98 L87 96 Z M70 90 L84 93 L82 90 L84 87 Z M110 90 L96 93 L98 90 L96 87 Z'/%3E%3Ccircle cx='90' cy='90' r='38' fill='none' stroke='%232B7A6A' stroke-width='1' stroke-opacity='0.06' stroke-dasharray='3,3'/%3E%3Ccircle cx='90' cy='90' r='60' fill='none' stroke='%232B7A6A' stroke-width='1.5' stroke-opacity='0.06'/%3E%3C!-- Chim Hạc bay ngược chiều kim đồng hồ quanh trống đồng --%3E%3Cpath d='M85 24 C 95 18, 105 20, 115 16 C 108 22, 102 24, 98 28 C 94 32, 88 34, 82 30 C 84 28, 85 26, 85 24 Z'/%3E%3Cpath d='M24 95 C 18 85, 20 75, 16 65 C 22 72, 24 78, 28 82 C 32 86, 34 92, 30 98 C 28 96, 26 95, 24 95 Z'/%3E%3Cpath d='M95 156 C 85 162, 75 160, 65 164 C 72 158, 74 152, 78 148 C 82 144, 84 138, 90 142 C 88 144, 87 146, 85 148 Z'/%3E%3Cpath d='M156 85 C 162 95, 160 105, 164 115 C 158 108, 152 106, 148 102 C 144 98, 138 96, 142 90 C 144 92, 146 93, 148 95 Z'/%3E%3C!-- Vân mây cổ & cánh sen --%3E%3Cpath d='M10 10 Q 18 4, 26 10 Q 32 16, 26 22 Q 18 20, 14 16 Z'/%3E%3Cpath d='M170 170 Q 162 164, 154 170 Q 148 176, 154 182 Q 162 180, 166 176 Z'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 24px 24px, 180px 180px;
 }
 
 /* Scroll chiếu thư cổ Imperial Scroll */

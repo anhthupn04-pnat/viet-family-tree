@@ -313,6 +313,12 @@ export default function HomePage() {
               }}
               onOpenKinshipForMember={(memberId) => {
                 setKinshipPreselectedA(memberId);
+                setKinshipPreselectedB(undefined);
+                setShowKinshipModal(true);
+              }}
+              onOpenKinshipForTwo={(memberAId, memberBId) => {
+                setKinshipPreselectedA(memberAId);
+                setKinshipPreselectedB(memberBId);
                 setShowKinshipModal(true);
               }}
               onOpenCreateClan={() => setShowCreateClanModal(true)}
@@ -509,6 +515,7 @@ export default function HomePage() {
         editingMember={editingMember}
         branches={branches}
         allMembers={allMembers}
+        isAdmin={isAdmin}
       />
 
       {/* 5. Kinship Calculator Modal */}

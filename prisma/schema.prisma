@@ -81,6 +81,9 @@ model MemberProfile {
   biography        String?        // Tiểu sử, học vị, công danh
   phone            String?        // Số điện thoại (chỉ hiện với thành viên có quyền)
   isVerified       Boolean        @default(true)
+  status           String         @default("approved") // 'pending' | 'approved' | 'rejected'
+  submitterName    String?        // Người đề xuất đóng góp
+  submitterNote    String?        // Ghi chú của người gửi
   
   fatherId         String?
   father           MemberProfile? @relation("FatherToChildren", fields: [fatherId], references: [id], onDelete: SetNull)

@@ -55,13 +55,30 @@ export default function AdminView({
   onOpenCreateBranch,
   onOpenAddMember,
 }: AdminViewProps) {
-  const [activeSubTab, setActiveSubTab] = useState<"requests" | "audit" | "overview">("requests");
+  const [activeSubTab, setActiveSubTab] = useState<"pendingMembers" | "requests" | "audit" | "overview">("pendingMembers");
   const [requests, setRequests] = useState<ChangeRequest[]>([]);
+  const [pendingMembers, setPendingMembers] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
+  const [loadingMembers, setLoadingMembers] = useState(true);
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [reviewNote, setReviewNote] = useState<Record<string, string>>({});
   const [processingId, setProcessingId] = useState<string | null>(null);
+
+  const fetchPendingMembers = async () => {
+    try {
+      setLoadingMembers(true);
+      const res = await fetch("/api/members?status=pending");
+      const data = await res.json();
+      if (data.members) {
+        setPendingMembers(data.members);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
 
   const fetchRequests = async () => {
     try {
@@ -94,9 +111,29 @@ export default function AdminView({
   };
 
   useEffect(() => {
+    fetchPendingMembers();
     fetchRequests();
     fetchAuditLogs();
   }, []);
+
+  const handleMemberApproval = async (id: string, action: "APPROVE" | "REJECT") => {
+    try {
+      setProcessingId(id);
+      const res = await fetch("/api/members", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action }),
+      });
+      if (res.ok) {
+        fetchPendingMembers();
+        fetchAuditLogs();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setProcessingId(null);
+    }
+  };
 
   const handleReview = async (id: string, status: "APPROVED" | "REJECTED") => {
     try {
@@ -142,7 +179,7 @@ export default function AdminView({
                 Bảng Điều Khiển Quản Trị Hệ Thống
               </h1>
               <p className="text-xs text-amber-100/70 mt-0.5">
-                Quản lý các nhánh dòng họ (1-4 chi mẫu khởi tạo), duyệt đề xuất gia phả và giám sát nhật ký an toàn.
+                Quản lý các nhánh dòng họ (1-4 chi mẫu khởi tạo), phê duyệt thành viên mới & thẩm định đề xuất phả hệ.
               </p>
             </div>
           </div>
@@ -170,7 +207,20 @@ export default function AdminView({
       </div>
 
       {/* Sub tabs */}
-      <div className="flex items-center space-x-2 border-b border-[#E5DAC6] pb-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-[#E5DAC6] pb-2">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab("pendingMembers")}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+            activeSubTab === "pendingMembers"
+              ? "bg-[#1E5F52] text-white shadow-sm"
+              : "bg-white text-stone-600 hover:bg-stone-100"
+          }`}
+        >
+          <UserCheck className="w-4 h-4 text-[#FADB7F]" />
+          <span>Thành Viên Mới Chờ Duyệt ({pendingMembers.length})</span>
+        </button>
+
         <button
           type="button"
           onClick={() => setActiveSubTab("requests")}
@@ -181,7 +231,7 @@ export default function AdminView({
           }`}
         >
           <Clock className="w-4 h-4" />
-          <span>Đề Xuất Chờ Duyệt ({pendingRequests.length})</span>
+          <span>Đề Xuất Chỉnh Sửa ({pendingRequests.length})</span>
         </button>
 
         <button
@@ -207,9 +257,111 @@ export default function AdminView({
           }`}
         >
           <Database className="w-4 h-4" />
-          <span>Thông Tin Cấu Hình & Chi Nhánh</span>
+          <span>Cấu Hình & Chi Nhánh</span>
         </button>
       </div>
+
+      {/* Sub tab: Pending Members (Thành viên đóng góp chờ duyệt) */}
+      {activeSubTab === "pendingMembers" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold font-serif text-[#1E5F52] flex items-center space-x-2">
+              <UserCheck className="w-5 h-5 text-[#E0A926]" />
+              <span>Danh Sách Đề Xuất Thêm Thành Viên Mới Từ Cộng Đồng</span>
+            </h2>
+            <button
+              type="button"
+              onClick={fetchPendingMembers}
+              className="text-xs text-stone-500 hover:text-[#1E5F52] flex items-center space-x-1"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Làm mới</span>
+            </button>
+          </div>
+
+          {loadingMembers ? (
+            <div className="p-8 text-center text-stone-400 text-xs">Đang tải danh sách chờ duyệt...</div>
+          ) : pendingMembers.length === 0 ? (
+            <div className="bg-white rounded-2xl p-8 text-center border border-[#E8DEC7] text-stone-500 text-xs">
+              Hiện tại không có thành viên mới nào đang chờ duyệt.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pendingMembers.map((m) => (
+                <div
+                  key={m.id}
+                  className="bg-white rounded-2xl border-2 border-[#E0A926]/40 p-5 shadow-sm hover:shadow-md transition-all space-y-3"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-100 pb-3">
+                    <div className="flex items-center space-x-2.5">
+                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                        Chờ Phê Duyệt
+                      </span>
+                      <h3 className="font-serif font-bold text-sm text-[#1E5F52]">
+                        {m.fullName}
+                      </h3>
+                      {m.courtesyName && (
+                        <span className="text-xs text-stone-500 italic">
+                          (Tự: {m.courtesyName})
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-stone-400 font-mono">
+                      Mã tạm: {m.memberCode} • Đời thứ {m.generation}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-stone-700 bg-[#FAF7EE] p-3 rounded-xl border border-[#E8DEC7]">
+                    <div>
+                      <span className="text-[10px] text-stone-400 block font-semibold">Giới tính:</span>
+                      <span>{m.gender === "FEMALE" ? "Nữ" : "Nam"}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-stone-400 block font-semibold">Trạng thái:</span>
+                      <span>{m.isAlive ? "Còn sống" : "Đã mất"}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-stone-400 block font-semibold">Chi họ:</span>
+                      <span>{m.branch?.branchName || "Chưa phân chi"}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-stone-400 block font-semibold">Người đề xuất:</span>
+                      <span className="font-medium text-[#8B1E1E]">{m.submitterName || "Cộng đồng"}</span>
+                    </div>
+                  </div>
+
+                  {m.submitterNote && (
+                    <div className="text-xs text-stone-600 bg-stone-50 p-2.5 rounded-lg border border-stone-200">
+                      <strong>Ghi chú từ người gửi:</strong> {m.submitterNote}
+                    </div>
+                  )}
+
+                  <div className="pt-2 flex items-center justify-end space-x-2">
+                    <button
+                      type="button"
+                      disabled={processingId === m.id}
+                      onClick={() => handleMemberApproval(m.id, "REJECT")}
+                      className="px-3.5 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold rounded-xl transition-all flex items-center space-x-1"
+                    >
+                      <XCircle className="w-3.5 h-3.5 text-stone-500" />
+                      <span>Từ chối</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={processingId === m.id}
+                      onClick={() => handleMemberApproval(m.id, "APPROVE")}
+                      className="px-4 py-1.5 bg-[#1E5F52] hover:bg-[#16483E] text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center space-x-1.5 border border-[#E0A926]/40"
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-[#FADB7F]" />
+                      <span>Phê Duyệt Vào Cây Gia Phả</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Content based on sub tab */}
       {activeSubTab === "requests" && (

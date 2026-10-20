@@ -10,7 +10,15 @@ export async function GET(request: Request) {
     const isAlive = searchParams.get("isAlive");
     const query = searchParams.get("q");
 
+    const statusParam = searchParams.get("status");
+
     const where: any = {};
+
+    if (statusParam && statusParam !== "ALL") {
+      where.status = statusParam;
+    } else if (!statusParam) {
+      where.status = { notIn: ["pending", "rejected"] };
+    }
 
     if (branchId && branchId !== "ALL") {
       where.branchId = branchId;
@@ -106,6 +114,10 @@ export async function POST(request: Request) {
       avatarUrl,
       biography,
       phone,
+      status,
+      submitterName,
+      submitterNote,
+      isAdmin,
     } = body;
 
     if (!fullName) {
@@ -122,6 +134,10 @@ export async function POST(request: Request) {
     const count = await prisma.memberProfile.count();
     const genNum = Number(generation) || 1;
     const memberCode = `PT-G${genNum}-${(count + 1).toString().padStart(2, "0")}`;
+
+    // Phân quyền: Nếu không phải Admin thì mặc định ở trạng thái 'pending'
+    const memberStatus = isAdmin ? (status || "approved") : "pending";
+    const isVerified = memberStatus === "approved";
 
     const newMember = await prisma.memberProfile.create({
       data: {
@@ -145,7 +161,10 @@ export async function POST(request: Request) {
         avatarUrl: avatarUrl?.trim() || null,
         biography: biography?.trim() || null,
         phone: phone?.trim() || null,
-        isVerified: true,
+        isVerified,
+        status: memberStatus,
+        submitterName: submitterName?.trim() || (isAdmin ? "Ban Quản Trị" : "Cộng đồng đề xuất"),
+        submitterNote: submitterNote?.trim() || null,
       },
     });
 
@@ -165,17 +184,19 @@ export async function POST(request: Request) {
     await prisma.auditLog.create({
       data: {
         clanId: clan.id,
-        userName: "Quản trị viên",
-        userEmail: "anhthuphan0102@gmail.com",
-        action: "THÊM THÀNH VIÊN",
+        userName: isAdmin ? "Quản trị viên" : (submitterName || "Người dùng phổ thông"),
+        userEmail: isAdmin ? "anhthuphan0102@gmail.com" : "guest@giaphaviet.vn",
+        action: isAdmin ? "THÊM THÀNH VIÊN" : "ĐỀ XUẤT THÀNH VIÊN",
         target: newMember.fullName,
-        details: `Thêm thành viên mới: ${newMember.fullName} (Mã: ${newMember.memberCode}, Đời ${newMember.generation})`,
+        details: `${isAdmin ? "Thêm thành viên" : "Đề xuất thành viên mới"}: ${newMember.fullName} (Mã: ${newMember.memberCode}, Đời ${newMember.generation}, Trạng thái: ${memberStatus})`,
       },
     });
 
     return NextResponse.json({
       success: true,
-      message: "Thêm thành viên mới thành công!",
+      message: isAdmin
+        ? "Thêm thành viên mới thành công!"
+        : "Đề xuất thêm thành viên mới đã được gửi thành công và đang chờ Ban Quản Trị phê duyệt trước khi hiển thị lên cây gia phả!",
       member: newMember,
     });
   } catch (error: any) {
@@ -189,6 +210,7 @@ export async function PUT(request: Request) {
     const body = await request.json();
     const {
       id,
+      action, // 'APPROVE' | 'REJECT'
       fullName,
       courtesyName,
       gender,
@@ -207,10 +229,40 @@ export async function PUT(request: Request) {
       avatarUrl,
       biography,
       phone,
+      status,
     } = body;
 
-    if (!id || !fullName) {
-      return NextResponse.json({ error: "Thiếu thông tin thành viên cần sửa." }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: "Thiếu ID thành viên." }, { status: 400 });
+    }
+
+    // Xử lý phê duyệt / từ chối nhanh từ Admin
+    if (action === "APPROVE") {
+      const approved = await prisma.memberProfile.update({
+        where: { id },
+        data: { status: "approved", isVerified: true },
+      });
+      return NextResponse.json({
+        success: true,
+        message: `Đã phê duyệt thành viên "${approved.fullName}" lên cây gia phả chính!`,
+        member: approved,
+      });
+    }
+
+    if (action === "REJECT") {
+      const rejected = await prisma.memberProfile.update({
+        where: { id },
+        data: { status: "rejected" },
+      });
+      return NextResponse.json({
+        success: true,
+        message: `Đã từ chối đề xuất thành viên "${rejected.fullName}".`,
+        member: rejected,
+      });
+    }
+
+    if (!fullName) {
+      return NextResponse.json({ error: "Thiếu thông tin họ và tên thành viên." }, { status: 400 });
     }
 
     // Kiểm tra chu trình huyết thống nếu có thay đổi cha/mẹ

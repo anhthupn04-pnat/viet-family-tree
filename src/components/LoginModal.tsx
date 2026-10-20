@@ -23,7 +23,7 @@ export default function LoginModal({
 
   const handleFillAdmin = () => {
     setEmail("anhthuphan0102@gmail.com");
-    setPassword("010204");
+    setPassword("01022004");
     setError(null);
   };
 

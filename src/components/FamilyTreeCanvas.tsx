@@ -16,6 +16,7 @@ import {
   Sparkles,
   Flower2,
   Info,
+  Compass,
 } from "lucide-react";
 
 interface MemberNode {
@@ -46,6 +47,7 @@ interface FamilyTreeCanvasProps {
   onSelectMember: (member: MemberNode) => void;
   onOpenAddMember?: () => void;
   onOpenKinshipForMember?: (memberId: string) => void;
+  onOpenKinshipForTwo?: (memberAId: string, memberBId: string) => void;
   onOpenCreateClan?: () => void;
   isAdmin: boolean;
   clanName?: string;
@@ -131,6 +133,7 @@ export default function FamilyTreeCanvas({
   onSelectMember,
   onOpenAddMember,
   onOpenKinshipForMember,
+  onOpenKinshipForTwo,
   onOpenCreateClan,
   isAdmin,
   clanName = "Gia Phả Phan Tộc Đại Tông",
@@ -140,6 +143,11 @@ export default function FamilyTreeCanvas({
   const [generations, setGenerations] = useState<Record<number, MemberNode[]>>({});
   const [maxGen, setMaxGen] = useState<number>(5);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Kinship 2-person comparison mode
+  const [kinshipCompareMode, setKinshipCompareMode] = useState<boolean>(false);
+  const [kinshipNodeA, setKinshipNodeA] = useState<MemberNode | null>(null);
+  const [kinshipNodeB, setKinshipNodeB] = useState<MemberNode | null>(null);
 
   // Filters
   const [selectedBranch, setSelectedBranch] = useState<string>("ALL");
@@ -427,6 +435,25 @@ export default function FamilyTreeCanvas({
               <option value="MALE">Chỉ Nam</option>
               <option value="FEMALE">Chỉ Nữ</option>
             </select>
+
+            {/* Toggle Chế độ tính xưng hô (chọn 2 người) */}
+            <button
+              type="button"
+              onClick={() => {
+                const next = !kinshipCompareMode;
+                setKinshipCompareMode(next);
+                setKinshipNodeA(null);
+                setKinshipNodeB(null);
+              }}
+              className={`px-3 py-1 text-xs font-bold rounded-xl transition-all shadow-xs flex items-center space-x-1.5 border ${
+                kinshipCompareMode
+                  ? "bg-[#C62828] text-white border-[#E0A926] shadow-sm animate-pulse"
+                  : "bg-amber-50 hover:bg-amber-100 text-[#78350F] border-amber-300"
+              }`}
+            >
+              <Compass className="w-3.5 h-3.5 text-[#E0A926]" />
+              <span>{kinshipCompareMode ? "Đang chọn 2 người..." : "🌿 Tính xưng hô (Chọn 2 người)"}</span>
+            </button>
           </div>
 
           {/* Quick Search on Canvas */}
@@ -446,6 +473,26 @@ export default function FamilyTreeCanvas({
             </button>
           </form>
         </div>
+
+        {/* Floating Kinship Selection Banner */}
+        {kinshipNodeA && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-gradient-to-r from-[#1E5F52] via-[#2B7A6A] to-[#1E5F52] text-white px-5 py-2.5 rounded-2xl shadow-2xl border-2 border-[#E0A926] flex items-center space-x-3 text-xs animate-fade-in backdrop-blur-md">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#E0A926] animate-ping"></span>
+            <span>
+              Người ①: <strong className="text-[#FADB7F]">{kinshipNodeA.fullName}</strong>. Hãy nhấp chọn người thứ ② trên sơ đồ để tính xưng hô thuần Việt!
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setKinshipNodeA(null);
+                setKinshipNodeB(null);
+              }}
+              className="ml-2 px-2.5 py-0.5 bg-white/20 hover:bg-white/30 rounded-lg text-[10px] text-white font-semibold transition-colors"
+            >
+              Hủy
+            </button>
+          </div>
+        )}
 
         {/* Canvas Workspace with Traditional Lotus Watermark */}
         <div
@@ -557,26 +604,63 @@ export default function FamilyTreeCanvas({
                           {genMembers.map((member) => {
                             const isHighlighted = highlightedMemberId === member.id;
                             const isFemale = member.gender === "FEMALE";
+                            const isNodeA = kinshipNodeA?.id === member.id;
+                            const isNodeB = kinshipNodeB?.id === member.id;
 
                             return (
                               <div
                                 key={member.id}
                                 className={`relative transition-all duration-200 ${
-                                  isHighlighted ? "scale-105 z-20" : ""
+                                  isHighlighted || isNodeA || isNodeB ? "scale-105 z-20" : ""
                                 }`}
                               >
                                 {/* Vertical drop connector tick to center bar */}
-                                <div className="w-0.5 h-3 bg-[#8CA397] mx-auto -mb-1"></div>
+                                <div className={`w-0.5 h-3 mx-auto -mb-1 ${
+                                  isNodeA || isNodeB ? "bg-[#E0A926] w-1" : "bg-[#8CA397]"
+                                }`}></div>
 
                                 {/* NODE CARD: Deep Jade Green (#1E5F52 / #2B7A6A) with crisp white text & rounded corners */}
                                 <div
-                                  onClick={() => onSelectMember(member)}
-                                  className={`w-44 sm:w-48 rounded-xl p-3 cursor-pointer transition-all border ${
-                                    isHighlighted
+                                  onClick={() => {
+                                    if (kinshipCompareMode) {
+                                      if (!kinshipNodeA) {
+                                        setKinshipNodeA(member);
+                                      } else if (kinshipNodeA.id === member.id) {
+                                        setKinshipNodeA(null);
+                                      } else {
+                                        setKinshipNodeB(member);
+                                        if (onOpenKinshipForTwo) {
+                                          onOpenKinshipForTwo(kinshipNodeA.id, member.id);
+                                        } else if (onOpenKinshipForMember) {
+                                          onOpenKinshipForMember(kinshipNodeA.id);
+                                        }
+                                      }
+                                    } else {
+                                      onSelectMember(member);
+                                    }
+                                  }}
+                                  className={`w-44 sm:w-48 rounded-xl p-3 cursor-pointer transition-all border relative ${
+                                    isNodeA
+                                      ? "ring-4 ring-[#E0A926] shadow-2xl border-[#E0A926] bg-[#16483E] scale-102"
+                                      : isNodeB
+                                      ? "ring-4 ring-[#F06292] shadow-2xl border-[#F06292] bg-[#16483E] scale-102"
+                                      : isHighlighted
                                       ? "ring-3 ring-[#E0A926] shadow-xl border-[#E0A926] scale-102"
                                       : "border-[#E0A926]/40 hover:border-[#E0A926] hover:shadow-lg"
                                   } bg-[#1E5F52] text-white flex flex-col justify-between`}
                                 >
+                                  {/* Kinship Selection Badge Tag */}
+                                  {isNodeA && (
+                                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#E0A926] text-[#24150B] font-bold text-[10px] px-2 py-0.5 rounded-full shadow-md border border-white">
+                                      ① Tôi
+                                    </div>
+                                  )}
+                                  {isNodeB && (
+                                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#F06292] text-white font-bold text-[10px] px-2 py-0.5 rounded-full shadow-md border border-white">
+                                      ② Đối chiếu
+                                    </div>
+                                  )}
+
                                   {/* Top Row: Avatar & Status Badge */}
                                   <div className="flex items-center justify-between mb-1.5">
                                     <div
@@ -596,6 +680,20 @@ export default function FamilyTreeCanvas({
                                         <span>{member.fullName.charAt(0)}</span>
                                       )}
                                     </div>
+
+                                    {/* Action button: quick kinship selection */}
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setKinshipCompareMode(true);
+                                        setKinshipNodeA(member);
+                                      }}
+                                      title="Chọn người này để tính quan hệ xưng hô"
+                                      className="p-1 rounded-full bg-white/10 hover:bg-[#E0A926] hover:text-[#24150B] text-amber-200 transition-colors"
+                                    >
+                                      <Compass className="w-3.5 h-3.5" />
+                                    </button>
 
                                     {/* Sub-badge: C (Còn sống), M (Đã mất) as in giao diện.jpg */}
                                     <span
