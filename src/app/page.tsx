@@ -13,7 +13,9 @@ import InviteModal from "@/components/InviteModal";
 import KinshipCalculatorModal from "@/components/KinshipCalculatorModal";
 import HistoryModal from "@/components/HistoryModal";
 import AnniversariesModal from "@/components/AnniversariesModal";
+import AnniversariesView from "@/components/AnniversariesView";
 import LotusFooter from "@/components/LotusFooter";
+import { MOCK_MEMBERS } from "@/lib/mockData";
 import {
   ShieldCheck,
   Eye,
@@ -86,9 +88,23 @@ export default function HomePage() {
   const [focusedMemberId, setFocusedMemberId] = useState<string | null>(null);
   const [treeRefreshKey, setTreeRefreshKey] = useState<number>(0);
   const [latestSavedMember, setLatestSavedMember] = useState<any | null>(null);
+  const [quickActionContext, setQuickActionContext] = useState<any | null>(null);
 
   // Toast notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const handleResetMockData = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("gia_pha_members_cache");
+      localStorage.removeItem("gia_pha_deleted_ids");
+      localStorage.removeItem("gia_pha_dirty_members");
+      saveLocalMembers(MOCK_MEMBERS as any[]);
+    }
+    setAllMembers(MOCK_MEMBERS as any[]);
+    setLatestSavedMember(null);
+    setTreeRefreshKey(Date.now());
+    showToast("Đã khôi phục Cây Mẫu 4 thế hệ chuẩn ban đầu thành công!");
+  };
 
   // Guest Propose Change Modal
   const [showProposeModal, setShowProposeModal] = useState(false);
@@ -402,11 +418,14 @@ export default function HomePage() {
         onOpenCreateBranch={() => setActiveTab("admin")}
         onOpenAddMember={() => {
           setEditingMember(null);
+          setQuickActionContext(null);
           setShowMemberFormModal(true);
         }}
         onOpenInvite={() => setShowInviteModal(true)}
         onOpenHistory={() => setShowHistoryModal(true)}
         onOpenAnniversaries={() => setShowAnniversariesModal(true)}
+        onOpenKinship={() => setShowKinshipModal(true)}
+        onResetMockData={handleResetMockData}
         onFocusMember={(memberId) => {
           setFocusedMemberId(memberId);
           setActiveTab("tree");
@@ -416,17 +435,28 @@ export default function HomePage() {
         clanName={clan?.name || "Gia phả dòng họ"}
       />
 
-      {/* Main Content Area (Focused on Tree Diagram, Member List, and Admin Approval Dashboard) */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+      {/* Main Content Area */}
+      <main className="flex-1 w-full mx-auto">
         {/* TAB 1: Cây gia phả trực hệ (Family Tree) */}
         {activeTab === "tree" && (
-          <div className="space-y-4">
+          <div className="w-full h-full">
             <FamilyTreeCanvas
               onSelectMember={(m) => {
                 setSelectedMember(m);
               }}
               onOpenAddMember={() => {
                 setEditingMember(null);
+                setQuickActionContext(null);
+                setShowMemberFormModal(true);
+              }}
+              onOpenQuickAdd={(type, targetMember) => {
+                setEditingMember(null);
+                setQuickActionContext({ type, targetMember });
+                setShowMemberFormModal(true);
+              }}
+              onEditMember={(m) => {
+                setEditingMember(m);
+                setQuickActionContext(null);
                 setShowMemberFormModal(true);
               }}
               onOpenKinshipForMember={(memberId) => {
@@ -451,38 +481,76 @@ export default function HomePage() {
 
         {/* TAB 2: Danh sách thành viên (Members) */}
         {activeTab === "members" && (
-          <MemberListView
-            onSelectMember={(m) => setSelectedMember(m)}
-            onEditMember={(m) => {
-              setEditingMember(m);
-              setShowMemberFormModal(true);
-            }}
-            onDeleteMember={handleDeleteMember}
-            onOpenAddMember={() => {
-              setEditingMember(null);
-              setShowMemberFormModal(true);
-            }}
-            onKinshipSearch={(memberId) => {
-              setKinshipPreselectedA(memberId);
-              setShowKinshipModal(true);
-            }}
-            isAdmin={isAdmin}
-            branches={branches}
-            refreshKey={treeRefreshKey}
-          />
+          <div className="max-w-7xl mx-auto px-4 py-6">
+            <MemberListView
+              onSelectMember={(m) => setSelectedMember(m)}
+              onEditMember={(m) => {
+                setEditingMember(m);
+                setQuickActionContext(null);
+                setShowMemberFormModal(true);
+              }}
+              onDeleteMember={handleDeleteMember}
+              onOpenAddMember={() => {
+                setEditingMember(null);
+                setQuickActionContext(null);
+                setShowMemberFormModal(true);
+              }}
+              onKinshipSearch={(memberId) => {
+                setKinshipPreselectedA(memberId);
+                setShowKinshipModal(true);
+              }}
+              isAdmin={isAdmin}
+              branches={branches}
+              refreshKey={treeRefreshKey}
+            />
+          </div>
         )}
 
-        {/* TAB 3: Bảng kiểm duyệt & Quản trị (Admin only) */}
+        {/* TAB 3: Lịch Lễ Giỗ & Sự Kiện */}
+        {activeTab === "anniversaries" && (
+          <div className="max-w-7xl mx-auto px-4 py-6">
+            <AnniversariesView isAdmin={isAdmin} />
+          </div>
+        )}
+
+        {/* TAB 4: Tra Cứu Xưng Hô (Kinship) */}
+        {activeTab === "kinship" && (
+          <div className="max-w-4xl mx-auto px-4 py-8">
+            <div className="bg-white rounded-2xl p-6 sm:p-8 shadow-xl border border-stone-200 text-center">
+              <div className="w-14 h-14 rounded-full bg-amber-100 border border-amber-300 flex items-center justify-center mx-auto mb-4 text-[#8B1E1E]">
+                <Sparkles className="w-7 h-7 text-[#E0A926]" />
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold font-serif text-[#8B1E1E] mb-2">
+                Công Cụ Tra Cứu Quan Hệ Xưng Hô Dòng Họ
+              </h2>
+              <p className="text-xs sm:text-sm text-stone-600 max-w-xl mx-auto mb-6">
+                Chọn 2 người bất kỳ trên cây gia phả để hệ thống thuật toán tự động tìm tổ tiên chung gần nhất (LCA) và xác định cách xưng hô chuẩn truyền thống Việt Nam.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowKinshipModal(true)}
+                className="px-6 py-3 bg-gradient-to-r from-[#8B1D1D] to-[#B91C1C] hover:from-[#721515] hover:to-[#991B1B] text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg transition-all active:scale-95 cursor-pointer inline-flex items-center gap-2"
+              >
+                <span>Mở Bảng Tra Cứu Xưng Hô</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: Bảng kiểm duyệt & Quản trị (Admin only) */}
         {activeTab === "admin" && isAdmin && (
-          <AdminView
-            onNavigateTab={setActiveTab}
-            onOpenCreateBranch={() => setActiveTab("admin")}
-            onOpenAddMember={() => {
-              setEditingMember(null);
-              setShowMemberFormModal(true);
-            }}
-            onMemberApproved={refreshAllData}
-          />
+          <div className="max-w-7xl mx-auto px-4 py-6">
+            <AdminView
+              onNavigateTab={setActiveTab}
+              onOpenCreateBranch={() => setActiveTab("admin")}
+              onOpenAddMember={() => {
+                setEditingMember(null);
+                setQuickActionContext(null);
+                setShowMemberFormModal(true);
+              }}
+              onMemberApproved={refreshAllData}
+            />
+          </div>
         )}
       </main>
 
@@ -533,6 +601,13 @@ export default function HomePage() {
         isAdmin={isAdmin}
         onEdit={(m) => {
           setEditingMember(m);
+          setQuickActionContext(null);
+          setSelectedMember(null);
+          setShowMemberFormModal(true);
+        }}
+        onQuickAdd={(type, targetMember) => {
+          setEditingMember(null);
+          setQuickActionContext({ type, targetMember });
           setSelectedMember(null);
           setShowMemberFormModal(true);
         }}
@@ -564,10 +639,12 @@ export default function HomePage() {
         onClose={() => {
           setShowMemberFormModal(false);
           setEditingMember(null);
+          setQuickActionContext(null);
         }}
         onSuccess={(msg, savedMember) => {
           setShowMemberFormModal(false);
           setEditingMember(null);
+          setQuickActionContext(null);
           if (savedMember) {
             // Lưu vĩnh viễn vào localStorage để không bao giờ bị load lại từ đầu
             recordLocalMemberSaved(savedMember);
@@ -586,6 +663,7 @@ export default function HomePage() {
           showToast(msg || "Đã lưu và cập nhật hồ sơ thành viên thành công!");
         }}
         editingMember={editingMember}
+        quickActionContext={quickActionContext}
         branches={branches}
         allMembers={allMembers}
         isAdmin={isAdmin}

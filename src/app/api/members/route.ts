@@ -297,8 +297,17 @@ export async function POST(request: Request) {
             wifeId,
             marriageOrder: 1,
           },
-        });
+        }).catch(() => {});
       }
+    }
+
+    // Nếu thêm theo thao tác "+ Thêm Cha/Mẹ" cho một người con đã có
+    if (body.targetChildId) {
+      const isMale = (gender || "MALE").toUpperCase() === "MALE";
+      await prisma.memberProfile.update({
+        where: { id: body.targetChildId },
+        data: isMale ? { fatherId: newMember.id } : { motherId: newMember.id },
+      }).catch(() => {});
     }
 
     // Đồng bộ sang Supabase PostgreSQL nếu được cấu hình

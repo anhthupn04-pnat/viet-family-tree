@@ -180,6 +180,9 @@ export function exportFamilyToGedcom(members: any[], clanName = "Gia phả dòng
   document.body.removeChild(link);
 }
 
-export function printOrExportA0() {
+export function printOrExportA0(clanName?: string) {
+  if (clanName && typeof document !== "undefined") {
+    document.title = `${clanName} - Sơ đồ phả hệ`;
+  }
   window.print();
 }

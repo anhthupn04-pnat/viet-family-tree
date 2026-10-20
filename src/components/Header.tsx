@@ -18,6 +18,8 @@ import {
   X,
   ChevronDown,
   LogOut,
+  RotateCcw,
+  Compass,
 } from "lucide-react";
 
 interface HeaderProps {
@@ -36,6 +38,8 @@ interface HeaderProps {
   onOpenInvite?: () => void;
   onOpenHistory?: () => void;
   onOpenAnniversaries?: () => void;
+  onOpenKinship?: () => void;
+  onResetMockData?: () => void;
   onFocusMember?: (memberId: string) => void;
   allMembers?: any[];
   pendingCount?: number;
@@ -78,6 +82,8 @@ export default function Header({
   onOpenInvite,
   onOpenHistory,
   onOpenAnniversaries,
+  onOpenKinship,
+  onResetMockData,
   onFocusMember,
   allMembers = [],
   pendingCount = 0,
@@ -128,7 +134,9 @@ export default function Header({
   };
 
   const navItems = [
-    { id: "tree", label: "Cây Gia Phả", icon: GitBranch },
+    { id: "tree", label: "Cây Phả Hệ", icon: GitBranch },
+    { id: "anniversaries", label: "Lịch Lễ Giỗ", icon: Calendar },
+    { id: "kinship", label: "Tra Cứu Xưng Hô", icon: Compass },
     { id: "members", label: "Danh Sách Thành Viên", icon: Users },
   ];
 
@@ -161,14 +169,28 @@ export default function Header({
             <GoldenDragon flip={true} />
           </div>
 
-          {/* Quick Shortcuts: Lịch giỗ, Lịch sử từ đường, Role Switcher */}
+          {/* Quick Shortcuts: Lịch giỗ, Khôi phục cây mẫu, Role Switcher */}
           <div className="flex items-center space-x-2 sm:space-x-2.5">
-            {/* Lối tắt 1: Lịch giỗ & Sự kiện tháng này */}
+            {/* Lối tắt 1: Khôi phục cây mẫu (Reset Mock Data) */}
+            {onResetMockData && (
+              <button
+                type="button"
+                onClick={onResetMockData}
+                className="flex items-center space-x-1.5 bg-[#5A0D0D] hover:bg-[#6e1212] border border-[#E0A926]/60 text-amber-100 px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-semibold transition-all shadow-xs cursor-pointer active:scale-95"
+                title="Khôi phục bộ dữ liệu cây mẫu 4 thế hệ chuẩn ban đầu"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-[#E0A926]" />
+                <span className="hidden sm:inline">Khôi phục Cây Mẫu</span>
+                <span className="sm:hidden">Cây mẫu</span>
+              </button>
+            )}
+
+            {/* Lối tắt 2: Lịch giỗ & Sự kiện */}
             {onOpenAnniversaries && (
               <button
                 type="button"
                 onClick={onOpenAnniversaries}
-                className="flex items-center space-x-1.5 bg-[#5A0D0D] hover:bg-[#6e1212] border border-[#E0A926]/50 text-amber-100 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all shadow-xs"
+                className="flex items-center space-x-1.5 bg-[#5A0D0D] hover:bg-[#6e1212] border border-[#E0A926]/50 text-amber-100 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all shadow-xs cursor-pointer"
                 title="Xem các ngày giỗ kỵ nhật & sự kiện dòng họ"
               >
                 <Calendar className="w-3.5 h-3.5 text-[#E0A926]" />
@@ -176,20 +198,20 @@ export default function Header({
               </button>
             )}
 
-            {/* Lối tắt 2: Lịch sử từ đường */}
-            {onOpenHistory && (
+            {/* Lối tắt 3: Tra cứu xưng hô */}
+            {onOpenKinship && (
               <button
                 type="button"
-                onClick={onOpenHistory}
-                className="flex items-center space-x-1.5 bg-[#5A0D0D] hover:bg-[#6e1212] border border-[#E0A926]/50 text-amber-100 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all shadow-xs"
-                title="Xem gốc tích, câu đối và nhà thờ họ"
+                onClick={onOpenKinship}
+                className="flex items-center space-x-1.5 bg-[#5A0D0D] hover:bg-[#6e1212] border border-[#E0A926]/50 text-amber-100 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all shadow-xs cursor-pointer"
+                title="Tra cứu quan hệ xưng hô giữa 2 người"
               >
-                <Building2 className="w-3.5 h-3.5 text-[#E0A926]" />
-                <span className="hidden sm:inline">Lịch sử từ đường</span>
+                <Compass className="w-3.5 h-3.5 text-[#E0A926]" />
+                <span className="hidden sm:inline">Xưng hô họ hàng</span>
               </button>
             )}
 
-            {/* Lối tắt 3: Kiểm duyệt (Admin Badge) */}
+            {/* Lối tắt 4: Kiểm duyệt (Admin Badge) */}
             {isAdmin && (
               <button
                 type="button"
@@ -207,12 +229,15 @@ export default function Header({
               </button>
             )}
 
-            {/* Role switch pill */}
-            <div className="flex items-center bg-[#5A0D0D] rounded-full p-0.5 border border-[#E0A926]/50 shadow-inner">
+            {/* Role switch toggle: Khách / Admin Demo */}
+            <div className="flex items-center bg-[#5A0D0D] rounded-full p-0.5 border border-[#E0A926]/60 shadow-inner">
+              <span className="text-[10px] text-amber-200/80 pl-2 pr-1 font-medium hidden md:inline">
+                Chế độ:
+              </span>
               <button
                 type="button"
                 onClick={() => onSwitchRole("GUEST")}
-                className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold flex items-center space-x-1 transition-all ${
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold flex items-center space-x-1 transition-all cursor-pointer ${
                   !isAdmin
                     ? "bg-[#E0A926] text-[#24150B] font-bold shadow-xs"
                     : "text-amber-200 hover:text-white"
@@ -224,14 +249,14 @@ export default function Header({
               <button
                 type="button"
                 onClick={() => onSwitchRole("ADMIN")}
-                className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold flex items-center space-x-1 transition-all ${
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold flex items-center space-x-1 transition-all cursor-pointer ${
                   isAdmin
                     ? "bg-[#E0A926] text-[#24150B] font-bold shadow-xs"
                     : "text-amber-200 hover:text-white"
                 }`}
               >
                 <ShieldCheck className="w-3 h-3 text-[#C62828]" />
-                <span>Admin</span>
+                <span>Admin Demo</span>
               </button>
             </div>
 

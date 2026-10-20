@@ -15,14 +15,24 @@ import {
   Loader2,
   CheckCircle2,
   Link as LinkIcon,
+  Award,
+  Plus,
+  Heart,
+  Baby,
 } from "lucide-react";
 import { uploadMemberAvatar } from "@/lib/supabaseStorage";
+
+export interface QuickActionContext {
+  type: "child" | "spouse" | "parent";
+  targetMember: any;
+}
 
 interface MemberFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (msg?: string, savedMember?: any) => void;
   editingMember?: any | null;
+  quickActionContext?: QuickActionContext | null;
   branches: any[];
   allMembers: any[];
   isAdmin?: boolean;
@@ -53,16 +63,17 @@ export default function MemberFormModal({
   onClose,
   onSuccess,
   editingMember,
+  quickActionContext,
   branches,
   allMembers,
   isAdmin = false,
 }: MemberFormModalProps) {
   const [fullName, setFullName] = useState("");
+  const [nickname, setNickname] = useState("");
   const [courtesyName, setCourtesyName] = useState("");
   const [gender, setGender] = useState("MALE");
-  const [generation, setGeneration] = useState(5);
+  const [generation, setGeneration] = useState(1);
   const [birthOrder, setBirthOrder] = useState("");
-  const [isMartyr, setIsMartyr] = useState(false);
   const [branchId, setBranchId] = useState("");
   const [fatherId, setFatherId] = useState("");
   const [motherId, setMotherId] = useState("");
@@ -71,6 +82,8 @@ export default function MemberFormModal({
   const [birthLunar, setBirthLunar] = useState("");
   const [deathSolar, setDeathSolar] = useState("");
   const [deathLunar, setDeathLunar] = useState("");
+  const [deathLunarDay, setDeathLunarDay] = useState<number | "">("");
+  const [deathLunarMonth, setDeathLunarMonth] = useState<number | "">("");
   const [isAlive, setIsAlive] = useState(true);
   const [burialPlace, setBurialPlace] = useState("");
   const [hometown, setHometown] = useState("Nga Sơn, Thanh Hóa");
@@ -78,6 +91,8 @@ export default function MemberFormModal({
   const [avatarUrl, setAvatarUrl] = useState("");
   const [phone, setPhone] = useState("");
   const [biography, setBiography] = useState("");
+  const [achievements, setAchievements] = useState<string[]>([]);
+  const [newAchievement, setNewAchievement] = useState("");
   const [submitterName, setSubmitterName] = useState("");
   const [submitterNote, setSubmitterNote] = useState("");
 
@@ -92,13 +107,15 @@ export default function MemberFormModal({
   const [showUrlInput, setShowUrlInput] = useState(false);
 
   useEffect(() => {
+    if (!isOpen) return;
+
     if (editingMember) {
       setFullName(editingMember.fullName || "");
+      setNickname(editingMember.nickname || "");
       setCourtesyName(editingMember.courtesyName || "");
       setGender(editingMember.gender || "MALE");
       setGeneration(editingMember.generation || 1);
       setBirthOrder(editingMember.birthOrder || "");
-      setIsMartyr(Boolean(editingMember.isMartyr));
       setBranchId(editingMember.branchId || "");
       setFatherId(editingMember.fatherId || "");
       setMotherId(editingMember.motherId || "");
@@ -115,6 +132,8 @@ export default function MemberFormModal({
       setBirthLunar(editingMember.birthLunar || "");
       setDeathSolar(editingMember.deathSolar || "");
       setDeathLunar(editingMember.deathLunar || "");
+      setDeathLunarDay(editingMember.deathLunarDay || "");
+      setDeathLunarMonth(editingMember.deathLunarMonth || "");
       setIsAlive(editingMember.isAlive !== undefined ? editingMember.isAlive : true);
       setBurialPlace(editingMember.burialPlace || "");
       setHometown(editingMember.hometown || "");
@@ -122,14 +141,69 @@ export default function MemberFormModal({
       setAvatarUrl(editingMember.avatarUrl || "");
       setPhone(editingMember.phone || "");
       setBiography(editingMember.biography || "");
-    } else {
-      // Defaults for new member
+      setAchievements(Array.isArray(editingMember.achievements) ? editingMember.achievements : []);
+    } else if (quickActionContext) {
+      // CONTEXT-AWARE PRE-POPULATION
+      const target = quickActionContext.targetMember;
+      const isTargetMale = (target.gender || "MALE").toUpperCase() === "MALE";
+
       setFullName("");
+      setNickname("");
+      setCourtesyName("");
+      setBirthOrder("");
+      setBirthSolar("");
+      setBirthLunar("");
+      setDeathSolar("");
+      setDeathLunar("");
+      setDeathLunarDay("");
+      setDeathLunarMonth("");
+      setIsAlive(true);
+      setBurialPlace("");
+      setHometown(target.hometown || "Nga Sơn, Thanh Hóa");
+      setCurrentResidence(target.currentResidence || "Hà Nội");
+      setAvatarUrl("");
+      setPhone("");
+      setBiography("");
+      setAchievements([]);
+
+      if (quickActionContext.type === "child") {
+        setGeneration(target.generation + 1);
+        setBranchId(target.branchId || (branches.length > 0 ? branches[0].id : ""));
+        setGender("MALE");
+        if (isTargetMale) {
+          setFatherId(target.id);
+          setMotherId(target.spouseId || "");
+        } else {
+          setMotherId(target.id);
+          setFatherId(target.spouseId || "");
+        }
+        setSpouseId("");
+        setBirthOrder("Con");
+      } else if (quickActionContext.type === "spouse") {
+        setGeneration(target.generation);
+        setBranchId(target.branchId || (branches.length > 0 ? branches[0].id : ""));
+        setGender(isTargetMale ? "FEMALE" : "MALE");
+        setSpouseId(target.id);
+        setFatherId("");
+        setMotherId("");
+        setBirthOrder(isTargetMale ? "Dâu" : "Rể");
+      } else if (quickActionContext.type === "parent") {
+        setGeneration(Math.max(1, target.generation - 1));
+        setBranchId(target.branchId || (branches.length > 0 ? branches[0].id : ""));
+        setGender("MALE");
+        setFatherId("");
+        setMotherId("");
+        setSpouseId("");
+        setBirthOrder("Bậc tiền nhân");
+      }
+    } else {
+      // Default new member
+      setFullName("");
+      setNickname("");
       setCourtesyName("");
       setGender("MALE");
-      setGeneration(5);
+      setGeneration(branches.length > 0 ? 1 : 1);
       setBirthOrder("");
-      setIsMartyr(false);
       setBranchId(branches.length > 0 ? branches[0].id : "");
       setFatherId("");
       setMotherId("");
@@ -138,6 +212,8 @@ export default function MemberFormModal({
       setBirthLunar("");
       setDeathSolar("");
       setDeathLunar("");
+      setDeathLunarDay("");
+      setDeathLunarMonth("");
       setIsAlive(true);
       setBurialPlace("");
       setHometown("Nga Sơn, Thanh Hóa");
@@ -145,8 +221,9 @@ export default function MemberFormModal({
       setAvatarUrl("");
       setPhone("");
       setBiography("");
+      setAchievements([]);
     }
-  }, [editingMember, branches, isOpen]);
+  }, [editingMember, quickActionContext, branches, isOpen]);
 
   if (!isOpen) return null;
 
@@ -175,6 +252,17 @@ export default function MemberFormModal({
     }
   };
 
+  const handleAddAchievement = () => {
+    if (newAchievement.trim()) {
+      setAchievements([...achievements, newAchievement.trim()]);
+      setNewAchievement("");
+    }
+  };
+
+  const handleRemoveAchievement = (index: number) => {
+    setAchievements(achievements.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim()) {
@@ -190,11 +278,11 @@ export default function MemberFormModal({
       const payload = {
         id: editingMember ? editingMember.id : undefined,
         fullName: fullName.trim(),
+        nickname: nickname.trim() || null,
         courtesyName: courtesyName?.trim() || null,
         gender,
         generation: Number(generation),
         birthOrder: birthOrder?.trim() || null,
-        isMartyr,
         branchId: branchId || null,
         fatherId: fatherId || null,
         motherId: motherId || null,
@@ -203,6 +291,8 @@ export default function MemberFormModal({
         birthLunar: birthLunar || null,
         deathSolar: deathSolar || null,
         deathLunar: deathLunar || null,
+        deathLunarDay: deathLunarDay !== "" ? Number(deathLunarDay) : null,
+        deathLunarMonth: deathLunarMonth !== "" ? Number(deathLunarMonth) : null,
         isAlive,
         burialPlace: burialPlace || null,
         hometown: hometown || null,
@@ -210,8 +300,13 @@ export default function MemberFormModal({
         avatarUrl: avatarUrl || null,
         phone: phone || null,
         biography: biography || null,
-        isAdmin: true, // Quyền admin tự động duyệt và lưu
-        status: "approved", // Trạng thái approved để lập tức hiển thị trên cây sơ đồ
+        achievements,
+        targetChildId:
+          quickActionContext && quickActionContext.type === "parent"
+            ? quickActionContext.targetMember.id
+            : undefined,
+        isAdmin: true,
+        status: "approved",
         submitterName: submitterName || "Quản trị viên",
         submitterNote: submitterNote || null,
       };
@@ -227,187 +322,121 @@ export default function MemberFormModal({
         throw new Error(data.error || "Không thể lưu hồ sơ thành viên.");
       }
 
-      const successMsg = editingMember
-        ? "Cập nhật hồ sơ thành công! Cây gia phả đã được làm mới trực tiếp."
-        : "Đã thêm thành viên mới thành công và cập nhật ngay lên cây gia phả!";
-
-      onSuccess(data.message || successMsg, data.member);
+      onSuccess(
+        editingMember ? "Cập nhật thành công!" : "Thêm thành viên mới thành công!",
+        data.member || payload
+      );
       onClose();
     } catch (err: any) {
-      setError(err.message || "Đã xảy ra lỗi.");
+      setError(err?.message || "Đã xảy ra lỗi khi kết nối máy chủ.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Lọc danh sách cha mẹ theo thế hệ nhỏ hơn
-  const potentialFathers = allMembers.filter(
-    (m) => m.gender === "MALE" && (!editingMember || m.id !== editingMember.id)
-  );
-  const potentialMothers = allMembers.filter(
-    (m) => m.gender === "FEMALE" && (!editingMember || m.id !== editingMember.id)
-  );
-  const potentialSpouses = allMembers.filter(
-    (m) => (!editingMember || m.id !== editingMember.id) && m.gender !== gender
-  );
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full border border-[#C59B27]/40 overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="px-6 py-4 bg-gradient-to-r from-[#FAF7EE] to-white border-b border-[#EFE8D8] flex items-center justify-between shrink-0">
-          <div>
-            <h3 className="text-lg font-bold font-serif text-[#8B1E1E] flex items-center space-x-2">
-              <UserPlus className="w-5 h-5 text-[#C59B27]" />
-              <span>
-                {editingMember ? "Chỉnh Sửa Hồ Sơ Thành Viên" : "Thêm Thành Viên Mới Vào Gia Phả"}
-              </span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-stone-200 overflow-hidden flex flex-col max-h-[92vh]">
+        {/* Modal Header */}
+        <div className="bg-gradient-to-r from-[#8B1D1D] to-[#691111] px-5 py-4 text-white flex items-center justify-between shrink-0 border-b-2 border-[#E0A926]">
+          <div className="flex items-center space-x-2">
+            <UserPlus className="w-5 h-5 text-amber-300" />
+            <h3 className="font-serif font-bold text-base sm:text-lg text-amber-100">
+              {editingMember ? "Chỉnh Sửa Hồ Sơ Thành Viên" : "Thêm Thành Viên Vào Gia Phả"}
             </h3>
-            <p className="text-xs text-stone-500 mt-0.5">
-              Cập nhật đầy đủ thông tin thế thứ, ngày sinh/mất âm dương và liên kết huyết thống.
-            </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-stone-400 hover:text-stone-700 p-1.5"
+            className="text-white/80 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
+        {/* Quick Action Context Banner */}
+        {quickActionContext && (
+          <div className="bg-amber-50 px-5 py-2.5 border-b border-amber-200 flex items-center gap-2 text-xs text-amber-900">
+            {quickActionContext.type === "child" && (
+              <>
+                <Baby className="w-4 h-4 text-blue-600 shrink-0" />
+                <span>
+                  Đang thêm <strong>Con</strong> cho <strong>{quickActionContext.targetMember.fullName}</strong> &bull; Thế hệ Đời {quickActionContext.targetMember.generation + 1}
+                </span>
+              </>
+            )}
+            {quickActionContext.type === "spouse" && (
+              <>
+                <Heart className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>
+                  Đang thêm <strong>Hôn phối (Vợ/Chồng)</strong> cho <strong>{quickActionContext.targetMember.fullName}</strong> &bull; Đời {quickActionContext.targetMember.generation}
+                </span>
+              </>
+            )}
+            {quickActionContext.type === "parent" && (
+              <>
+                <UserPlus className="w-4 h-4 text-amber-700 shrink-0" />
+                <span>
+                  Đang thêm <strong>Bậc Tiền nhân (Cha/Mẹ)</strong> cho <strong>{quickActionContext.targetMember.fullName}</strong> &bull; Đời {Math.max(1, quickActionContext.targetMember.generation - 1)}
+                </span>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
           {error && (
-            <div className="p-3 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200">
-              {error}
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs">
+              ⚠️ {error}
             </div>
           )}
 
-          {/* Avatar & Supabase Storage Media Upload Section */}
-          <div className="p-3.5 bg-gradient-to-r from-[#FAF7EE] to-[#F5EEDC]/60 rounded-xl border border-[#E0A926]/40 flex flex-col sm:flex-row items-center gap-4">
-            {/* Hidden native file input */}
+          {/* Avatar Upload */}
+          <div className="flex flex-col sm:flex-row items-center gap-4 p-3 bg-stone-50 rounded-xl border border-stone-200">
             <input
               type="file"
               ref={fileInputRef}
-              accept="image/png,image/jpeg,image/webp,image/jpg"
               onChange={handleAvatarFileChange}
+              accept="image/*"
               className="hidden"
             />
-
-            {/* Avatar Preview */}
-            <div className="relative group shrink-0">
-              <div
-                className={`w-20 h-20 rounded-full border-2 border-[#E0A926] shadow-md overflow-hidden flex items-center justify-center ${
-                  gender === "FEMALE" ? "bg-pink-900/80 text-pink-200" : "bg-emerald-950/80 text-amber-200"
-                }`}
-              >
-                {avatarUrl ? (
-                  <img
-                    src={avatarUrl}
-                    alt="Ảnh đại diện"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="flex flex-col items-center justify-center text-center">
-                    <ImageIcon className="w-6 h-6 text-[#E0A926]/70 mb-0.5" />
-                    <span className="text-[10px] font-semibold text-amber-100">
-                      {fullName ? fullName.charAt(0) : "Di ảnh"}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Hover trigger file upload button */}
+            <div className="relative w-16 h-16 rounded-full border-2 border-[#E0A926] shadow-sm overflow-hidden flex items-center justify-center shrink-0 bg-stone-200">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                <ImageIcon className="w-6 h-6 text-stone-400" />
+              )}
+            </div>
+            <div className="flex-1 w-full flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadingAvatar}
-                className="absolute inset-0 rounded-full bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
-                title="Đổi ảnh đại diện"
+                className="px-3 py-1.5 bg-[#8B1D1D] hover:bg-[#721515] text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 disabled:opacity-60 cursor-pointer"
               >
-                <Upload className="w-5 h-5 text-amber-300" />
-              </button>
-            </div>
-
-            {/* Upload controls & status */}
-            <div className="flex-1 w-full space-y-1.5">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <span className="text-xs font-bold text-stone-800 flex items-center space-x-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-[#C59B27]" />
-                  <span>Ảnh đại diện & Di ảnh tưởng niệm</span>
-                </span>
-                {avatarUrl && (
-                  <button
-                    type="button"
-                    onClick={() => setAvatarUrl("")}
-                    className="text-[11px] text-red-600 hover:text-red-800 flex items-center space-x-1 font-medium"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    <span>Xóa ảnh</span>
-                  </button>
+                {uploadingAvatar ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Upload className="w-3.5 h-3.5" />
                 )}
-              </div>
-
-              <div className="flex items-center gap-2 flex-wrap">
+                <span>Tải ảnh đại diện</span>
+              </button>
+              {avatarUrl && (
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingAvatar}
-                  className="px-3 py-1.5 bg-[#8B1E1E] hover:bg-[#721515] text-white text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center space-x-1.5 disabled:opacity-60 cursor-pointer"
+                  onClick={() => setAvatarUrl("")}
+                  className="px-2.5 py-1.5 text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-1"
                 >
-                  {uploadingAvatar ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-300" />
-                      <span>Đang tải lên Supabase Storage...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-3.5 h-3.5 text-amber-300" />
-                      <span>Tải ảnh lên Supabase Storage</span>
-                    </>
-                  )}
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Xóa ảnh</span>
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowUrlInput(!showUrlInput)}
-                  className="px-2.5 py-1.5 border border-stone-300 bg-white hover:bg-stone-50 text-stone-700 text-xs rounded-lg flex items-center space-x-1 transition-all"
-                >
-                  <LinkIcon className="w-3 h-3 text-stone-500" />
-                  <span>{showUrlInput ? "Ẩn URL" : "Nhập URL ảnh"}</span>
-                </button>
-              </div>
-
-              {showUrlInput && (
-                <div className="pt-1">
-                  <input
-                    type="url"
-                    value={avatarUrl}
-                    onChange={(e) => setAvatarUrl(e.target.value)}
-                    placeholder="https://... đường dẫn ảnh trực tiếp"
-                    className="w-full px-2.5 py-1 text-xs border border-stone-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#8B1E1E] bg-white"
-                  />
-                </div>
               )}
-
-              {avatarError && (
-                <p className="text-[11px] text-red-600 font-medium">⚠️ {avatarError}</p>
-              )}
-              {avatarSuccess && (
-                <p className="text-[11px] text-emerald-700 font-medium flex items-center space-x-1">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{avatarSuccess}</span>
-                </p>
-              )}
-              <p className="text-[10px] text-stone-500">
-                Lưu trữ tự động vào Supabase Storage bucket <code>family-tree-media</code>. Hỗ trợ định dạng JPG, PNG, WebP (tối đa 5MB).
-              </p>
             </div>
           </div>
 
-          {/* Hàng 1: Họ tên & Tên tự */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Names: Họ tên, Biệt danh, Tên tự */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-semibold text-stone-800 mb-1">
                 Họ và tên đầy đủ <span className="text-red-500">*</span>
@@ -417,65 +446,68 @@ export default function MemberFormModal({
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="Ví dụ: Phan Văn An, Phan Thị Mai..."
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8B1E1E]"
+                placeholder="Ví dụ: Phan Văn An"
+                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8B1D1D]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-amber-800 mb-1">
+                Biệt danh / Tên ở nhà <em>(in nghiêng)</em>
+              </label>
+              <input
+                type="text"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                placeholder='Ví dụ: "Bác Ba Đước", "Út Mập"'
+                className="w-full px-3 py-2 text-xs border border-amber-300 bg-amber-50/30 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-600 italic font-medium"
               />
             </div>
             <div>
               <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Tên tự / Tên húy / Pháp danh
+                Tên chữ / Tên húy / Pháp danh
               </label>
               <input
                 type="text"
                 value={courtesyName}
                 onChange={(e) => setCourtesyName(e.target.value)}
-                placeholder="Ví dụ: Hiệu Thuần Chính, Pháp danh Diệu Tâm..."
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8B1E1E]"
+                placeholder="Ví dụ: Hiệu Phúc Thiện"
+                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8B1D1D]"
               />
             </div>
           </div>
 
-          {/* Hàng 2: Giới tính, Đời thứ, Chi họ, Thứ bậc */}
+          {/* Gender, Generation, Branch, Birth Order */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Giới tính
-              </label>
+              <label className="block text-xs font-semibold text-stone-700 mb-1">Giới tính</label>
               <select
                 value={gender}
                 onChange={(e) => setGender(e.target.value)}
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#8B1E1E]"
+                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#8B1D1D]"
               >
                 <option value="MALE">Nam giới</option>
                 <option value="FEMALE">Nữ giới</option>
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Đời thứ (Thế hệ)
-              </label>
-              <select
+              <label className="block text-xs font-semibold text-stone-700 mb-1">Đời thứ</label>
+              <input
+                type="number"
+                min={1}
+                max={20}
                 value={generation}
                 onChange={(e) => setGeneration(Number(e.target.value))}
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#8B1E1E]"
-              >
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((g) => (
-                  <option key={g} value={g}>
-                    Đời {g}
-                  </option>
-                ))}
-              </select>
+                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8B1D1D]"
+              />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Thuộc Chi Họ
-              </label>
+              <label className="block text-xs font-semibold text-stone-700 mb-1">Chi họ</label>
               <select
                 value={branchId}
                 onChange={(e) => setBranchId(e.target.value)}
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#8B1E1E]"
+                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#8B1D1D]"
               >
-                <option value="">-- Chưa phân chi --</option>
+                <option value="">-- Chi họ chính --</option>
                 {branches.map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.branchName}
@@ -484,285 +516,265 @@ export default function MemberFormModal({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Thứ bậc trong gia đình
-              </label>
+              <label className="block text-xs font-semibold text-stone-700 mb-1">Vai vế / Thứ bậc</label>
               <input
                 type="text"
-                list="birth-order-list"
                 value={birthOrder}
                 onChange={(e) => setBirthOrder(e.target.value)}
-                placeholder="Ví dụ: Con trưởng, Con thứ 2..."
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#8B1E1E]"
+                placeholder="Trưởng nam, Dâu..."
+                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8B1D1D]"
               />
-              <datalist id="birth-order-list">
-                {BIRTH_ORDER_PRESETS.map((p) => (
-                  <option key={p} value={p} />
-                ))}
-              </datalist>
             </div>
           </div>
 
-          {/* Hàng 3: Huyết thống & Hôn phối (Cha ruột, Mẹ ruột & Vợ/Chồng) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-stone-50 rounded-xl border border-stone-200">
-            <div>
-              <label className="block text-xs font-semibold text-blue-900 mb-1">
-                Thân phụ (Cha ruột)
-              </label>
-              <select
-                value={fatherId}
-                onChange={(e) => setFatherId(e.target.value)}
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#8B1E1E]"
+          {/* Relationships: Father, Mother, Spouse */}
+          <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-2">
+            <h4 className="font-bold text-stone-800 flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-[#8B1D1D]" />
+              <span>Quan Hệ Gia Phả Trực Hệ</span>
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] text-stone-600 mb-0.5">Thân phụ (Cha)</label>
+                <select
+                  value={fatherId}
+                  onChange={(e) => setFatherId(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-xs border border-stone-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#8B1D1D]"
+                >
+                  <option value="">-- Không rõ / Khởi tổ --</option>
+                  {allMembers
+                    .filter((m) => m.id !== (editingMember ? editingMember.id : "") && (m.gender || "MALE").toUpperCase() === "MALE")
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.fullName} {m.nickname ? `(${m.nickname})` : ""} - Đời {m.generation}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-stone-600 mb-0.5">Thân mẫu (Mẹ)</label>
+                <select
+                  value={motherId}
+                  onChange={(e) => setMotherId(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-xs border border-stone-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#8B1D1D]"
+                >
+                  <option value="">-- Không rõ --</option>
+                  {allMembers
+                    .filter((m) => m.id !== (editingMember ? editingMember.id : "") && (m.gender || "MALE").toUpperCase() === "FEMALE")
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.fullName} {m.nickname ? `(${m.nickname})` : ""} - Đời {m.generation}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-stone-600 mb-0.5">Hôn phối (Vợ / Chồng)</label>
+                <select
+                  value={spouseId}
+                  onChange={(e) => setSpouseId(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-xs border border-stone-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#8B1D1D]"
+                >
+                  <option value="">-- Chưa có --</option>
+                  {allMembers
+                    .filter((m) => m.id !== (editingMember ? editingMember.id : ""))
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.fullName} {m.nickname ? `(${m.nickname})` : ""} - Đời {m.generation}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Life status & Death / Anniversary */}
+          <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-stone-800">Tình trạng còn sống / đã mất</label>
+              <div className="flex items-center gap-3">
+                <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="isAlive"
+                    checked={isAlive}
+                    onChange={() => setIsAlive(true)}
+                    className="text-emerald-600"
+                  />
+                  <span className="text-emerald-700 font-medium">Đang sống</span>
+                </label>
+                <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="isAlive"
+                    checked={!isAlive}
+                    onChange={() => setIsAlive(false)}
+                    className="text-amber-800"
+                  />
+                  <span className="text-amber-900 font-medium">Đã mất</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div>
+                <label className="block text-[11px] text-stone-600 mb-0.5">Ngày sinh (Dương lịch)</label>
+                <input
+                  type="date"
+                  value={birthSolar}
+                  onChange={(e) => setBirthSolar(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-xs border border-stone-300 rounded-lg bg-white focus:outline-none"
+                />
+              </div>
+
+              {!isAlive && (
+                <div className="space-y-2">
+                  <label className="block text-[11px] font-bold text-amber-800 mb-0.5">
+                    Ngày giỗ Âm lịch (Kỵ nhật)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <input
+                        type="number"
+                        min={1}
+                        max={30}
+                        placeholder="Ngày (ví dụ: 15)"
+                        value={deathLunarDay}
+                        onChange={(e) => setDeathLunarDay(e.target.value ? Number(e.target.value) : "")}
+                        className="w-full px-2.5 py-1.5 text-xs border border-amber-300 bg-amber-50/50 rounded-lg focus:outline-none"
+                      />
+                    </div>
+                    <span className="text-stone-500 font-bold">/</span>
+                    <div className="flex-1">
+                      <input
+                        type="number"
+                        min={1}
+                        max={12}
+                        placeholder="Tháng (ví dụ: 3)"
+                        value={deathLunarMonth}
+                        onChange={(e) => setDeathLunarMonth(e.target.value ? Number(e.target.value) : "")}
+                        className="w-full px-2.5 py-1.5 text-xs border border-amber-300 bg-amber-50/50 rounded-lg focus:outline-none"
+                      />
+                    </div>
+                    <span className="text-amber-800 font-bold shrink-0">ÂL</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {!isAlive && (
+              <div>
+                <label className="block text-[11px] text-stone-600 mb-0.5">Nơi an táng / Mộ phần</label>
+                <input
+                  type="text"
+                  value={burialPlace}
+                  onChange={(e) => setBurialPlace(e.target.value)}
+                  placeholder="Ví dụ: Khu nghĩa trang dòng họ, Thôn Phúc Thịnh"
+                  className="w-full px-2.5 py-1.5 text-xs border border-stone-300 rounded-lg bg-white focus:outline-none"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Achievements & Milestones (Strictly NO war/martyr classification) */}
+          <div className="p-3 bg-amber-50/40 rounded-xl border border-amber-200/60 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-stone-800 flex items-center gap-1.5">
+                <Award className="w-4 h-4 text-amber-600" />
+                <span>Thành Tích & Cột Mốc Nổi Bật</span>
+              </span>
+              <span className="text-[10px] text-stone-500 italic">
+                (Học vấn, sự nghiệp, kinh doanh, nghề truyền thống)
+              </span>
+            </div>
+
+            {/* Existing achievements tags */}
+            {achievements.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {achievements.map((item, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1 bg-amber-100/80 border border-amber-300 text-amber-900 text-[11px] px-2 py-0.5 rounded-full font-medium shadow-2xs"
+                  >
+                    <span>{item}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveAchievement(idx)}
+                      className="text-amber-700 hover:text-red-700 ml-0.5 cursor-pointer"
+                    >
+                      &times;
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Add new achievement input */}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newAchievement}
+                onChange={(e) => setNewAchievement(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddAchievement();
+                  }
+                }}
+                placeholder="Ví dụ: Tốt nghiệp Đại học Y 1995, Nghệ nhân gốm truyền thống..."
+                className="flex-1 px-3 py-1.5 text-xs border border-stone-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-amber-600"
+              />
+              <button
+                type="button"
+                onClick={handleAddAchievement}
+                className="px-3 py-1.5 bg-amber-700 hover:bg-amber-800 text-white rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer shrink-0"
               >
-                <option value="">-- Chưa rõ hoặc là Khởi Tổ --</option>
-                {potentialFathers.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.fullName} (Đời {f.generation} - {f.memberCode})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-pink-900 mb-1">
-                Thân mẫu (Mẹ ruột)
-              </label>
-              <select
-                value={motherId}
-                onChange={(e) => setMotherId(e.target.value)}
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#8B1E1E]"
-              >
-                <option value="">-- Chưa rõ --</option>
-                {potentialMothers.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.fullName} (Đời {m.generation})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-emerald-900 mb-1">
-                {gender === "MALE" ? "Phối ngẫu (Hiền thê / Vợ)" : "Phối ngẫu (Phu quân / Chồng)"}
-              </label>
-              <select
-                value={spouseId}
-                onChange={(e) => setSpouseId(e.target.value)}
-                className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-[#8B1E1E]"
-              >
-                <option value="">-- Chưa kết hôn / Chưa rõ --</option>
-                {potentialSpouses.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.fullName} (Đời {s.generation}{s.memberCode ? ` - ${s.memberCode}` : ""})
-                  </option>
-                ))}
-              </select>
+                <Plus className="w-3.5 h-3.5" />
+                <span>Thêm</span>
+              </button>
             </div>
           </div>
 
-          {/* Hàng 4: Ngày sinh & Ngày mất (Dương / Âm) */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div>
-              <label className="block text-[11px] font-semibold text-stone-700 mb-1">
-                Ngày sinh Dương lịch
-              </label>
-              <input
-                type="date"
-                value={birthSolar}
-                onChange={(e) => setBirthSolar(e.target.value)}
-                className="w-full px-2.5 py-1.5 text-xs border border-stone-300 rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold text-stone-700 mb-1">
-                Ngày sinh Âm lịch
-              </label>
-              <input
-                type="text"
-                placeholder="Ví dụ: 15/01/Giáp Thân"
-                value={birthLunar}
-                onChange={(e) => setBirthLunar(e.target.value)}
-                className="w-full px-2.5 py-1.5 text-xs border border-stone-300 rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold text-stone-700 mb-1">
-                Ngày mất Dương lịch
-              </label>
-              <input
-                type="date"
-                disabled={isAlive}
-                value={deathSolar}
-                onChange={(e) => setDeathSolar(e.target.value)}
-                className="w-full px-2.5 py-1.5 text-xs border border-stone-300 rounded-lg disabled:bg-stone-100"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold text-stone-700 mb-1">
-                Ngày mất Âm lịch (Giỗ)
-              </label>
-              <input
-                type="text"
-                disabled={isAlive}
-                placeholder="Ví dụ: 02/07/Ất Sửu"
-                value={deathLunar}
-                onChange={(e) => setDeathLunar(e.target.value)}
-                className="w-full px-2.5 py-1.5 text-xs border border-stone-300 rounded-lg disabled:bg-stone-100"
-              />
-            </div>
-          </div>
-
-          {/* Trạng thái còn sống & Liệt sĩ toggle */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="flex items-center space-x-3 p-2.5 bg-stone-50 rounded-lg border border-stone-200">
-              <input
-                type="checkbox"
-                id="alive-toggle"
-                checked={isAlive}
-                onChange={(e) => setIsAlive(e.target.checked)}
-                className="w-4 h-4 text-[#8B1E1E] accent-[#8B1E1E] rounded cursor-pointer"
-              />
-              <label htmlFor="alive-toggle" className="text-xs font-semibold text-stone-800 cursor-pointer">
-                Thành viên hiện vẫn còn sống
-              </label>
-            </div>
-
-            <div className="flex items-center space-x-3 p-2.5 bg-red-50/60 rounded-lg border border-red-200">
-              <input
-                type="checkbox"
-                id="martyr-toggle"
-                checked={isMartyr}
-                onChange={(e) => setIsMartyr(e.target.checked)}
-                className="w-4 h-4 text-red-600 accent-red-600 rounded cursor-pointer"
-              />
-              <label htmlFor="martyr-toggle" className="text-xs font-semibold text-red-900 cursor-pointer flex items-center space-x-1.5">
-                <span>⭐ Liệt sĩ / Có công với Tổ quốc</span>
-              </label>
-            </div>
-          </div>
-
-          {/* Quê quán, Nơi ở, Mộ phần, SĐT */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Quê quán gốc
-              </label>
-              <input
-                type="text"
-                value={hometown}
-                onChange={(e) => setHometown(e.target.value)}
-                placeholder="Nga Sơn, Thanh Hóa"
-                className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Nơi cư trú hiện nay
-              </label>
-              <input
-                type="text"
-                value={currentResidence}
-                onChange={(e) => setCurrentResidence(e.target.value)}
-                placeholder="Hà Nội, TP.HCM, Đà Nẵng..."
-                className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Mộ phần / Nơi an táng (nếu đã mất)
-              </label>
-              <input
-                type="text"
-                value={burialPlace}
-                onChange={(e) => setBurialPlace(e.target.value)}
-                placeholder="Khu lăng mộ Phan Tộc..."
-                className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Số điện thoại liên hệ
-              </label>
-              <input
-                type="text"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="0912..."
-                className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg"
-              />
-            </div>
-          </div>
-
-          {/* Tiểu sử, học vấn, công danh */}
+          {/* Biography */}
           <div>
             <label className="block text-xs font-semibold text-stone-700 mb-1">
-              Tiểu sử, nghề nghiệp & Đóng góp cho dòng họ
+              Tiểu sử vắn tắt & Ghi nhớ
             </label>
             <textarea
               rows={3}
               value={biography}
               onChange={(e) => setBiography(e.target.value)}
-              placeholder="Ghi lại học vị, công đức, chức danh hoặc sự kiện cuộc đời..."
-              className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded-lg"
+              placeholder="Ghi lại các dấu mốc cuộc đời, đức hạnh, đóng góp cho gia đình và dòng họ..."
+              className="w-full px-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#8B1D1D]"
             />
           </div>
-
-          {/* Cơ chế cập nhật trực tiếp vào hệ thống */}
-          {!isAdmin && !editingMember && (
-            <div className="bg-[#FAF7EE] border border-[#E0A926]/40 p-3.5 rounded-xl text-xs space-y-3">
-              <div className="flex items-center space-x-1.5 text-[#1E5F52] font-bold">
-                <Sparkles className="w-4 h-4 text-[#E0A926]" />
-                <span>Cập nhật trực tiếp lên Cây gia phả:</span>
-              </div>
-              <p className="text-[11px] text-stone-600">
-                Hồ sơ thành viên mới sau khi lưu sẽ <strong>ngay lập tức xuất hiện và kết nối huyết thống</strong> trên sơ đồ cây gia phả và đồng bộ vào cơ sở dữ liệu.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <div>
-                  <label className="block text-[11px] font-semibold text-stone-700 mb-1">
-                    Họ tên người khởi tạo / cập nhật
-                  </label>
-                  <input
-                    type="text"
-                    value={submitterName}
-                    onChange={(e) => setSubmitterName(e.target.value)}
-                    placeholder="Ví dụ: Phan Quốc Bảo"
-                    className="w-full px-2.5 py-1.5 text-xs border border-stone-300 rounded-lg bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-stone-700 mb-1">
-                    Nguồn tư liệu minh chứng / Ghi chú
-                  </label>
-                  <input
-                    type="text"
-                    value={submitterNote}
-                    onChange={(e) => setSubmitterNote(e.target.value)}
-                    placeholder="Theo gia phả chép tay, sổ hộ khẩu..."
-                    className="w-full px-2.5 py-1.5 text-xs border border-stone-300 rounded-lg bg-white"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Footer buttons */}
-          <div className="pt-3 flex items-center justify-end space-x-2 border-t border-stone-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-medium text-stone-600 hover:text-stone-800 rounded-lg hover:bg-stone-100"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-5 py-2 bg-[#8B1E1E] hover:bg-[#721515] text-white text-xs font-semibold rounded-lg shadow-md transition-all flex items-center space-x-1.5"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>{loading ? "Đang lưu..." : editingMember ? "Cập nhật hồ sơ" : "Lưu thành viên"}</span>
-            </button>
-          </div>
         </form>
+
+        {/* Modal Footer */}
+        <div className="bg-stone-50 px-5 py-3 border-t border-stone-200 flex items-center justify-end gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-medium text-stone-600 hover:bg-stone-200 rounded-xl transition-colors cursor-pointer"
+          >
+            Hủy bỏ
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={loading}
+            className="px-5 py-2 text-xs font-bold text-white bg-gradient-to-r from-[#8B1D1D] to-[#B91C1C] hover:from-[#721515] hover:to-[#991B1B] rounded-xl shadow-md flex items-center gap-1.5 disabled:opacity-60 cursor-pointer active:scale-95 transition-all"
+          >
+            {loading ? (
+              <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
+            ) : (
+              <Save className="w-4 h-4 text-amber-300" />
+            )}
+            <span>{editingMember ? "Lưu Cập Nhật" : "Hoàn Tất & Đưa Vào Phả Hệ"}</span>
+          </button>
+        </div>
       </div>
     </div>
   );
