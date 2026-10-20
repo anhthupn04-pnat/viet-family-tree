@@ -61,13 +61,17 @@ export function computeFamilyTreeLayout(
       handled.add(spouse.id);
 
       // Nếu một người là con ruột trong dòng họ (có cha/mẹ) còn người kia là dâu/rể,
-      // thì người con ruột luôn là primary để xác định nguồn huyết thống
+      // thì người con ruột luôn là primary để bảo toàn huyết thống dòng họ gốc
       const mHasParents = Boolean(m.fatherId || m.motherId);
       const spHasParents = Boolean(spouse.fatherId || spouse.motherId);
 
-      if (!mHasParents && spHasParents) {
+      if (spHasParents && !mHasParents) {
         primary = spouse;
         secondary = m;
+      } else if (mHasParents && !spHasParents) {
+        // m là con ruột (ví dụ con gái trong họ lấy rể), m PHẢI GIỮ LÀ PRIMARY
+        primary = m;
+        secondary = spouse;
       } else if (primary.gender === "female" && spouse.gender === "male") {
         primary = spouse;
         secondary = m;
@@ -100,9 +104,9 @@ export function computeFamilyTreeLayout(
   const rootUnits: TreeUnit[] = [];
 
   units.forEach((unit) => {
-    const p = unit.primary;
-    const fatherId = p.fatherId;
-    const motherId = p.motherId;
+    // Kiểm tra cha/mẹ của cả primary lẫn spouse (hỗ trợ cả con trai lẫn con gái trong họ)
+    const fatherId = unit.primary.fatherId || unit.spouse?.fatherId;
+    const motherId = unit.primary.motherId || unit.spouse?.motherId;
 
     let parentUnit: TreeUnit | null = null;
     if (fatherId && memberToUnit.has(fatherId)) {

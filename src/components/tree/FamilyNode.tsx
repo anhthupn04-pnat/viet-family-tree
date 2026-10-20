@@ -67,10 +67,22 @@ export default function FamilyNode({ data }: FamilyNodeProps) {
       roleBadge = isMale ? `Con trai thứ ${member.orderInFamily}` : `Con gái thứ ${member.orderInFamily}`;
     }
   } else if (member.orderInFamily) {
+    const hasParentsInClan = Boolean(member.fatherId || member.motherId);
     if (isMale) {
-      roleBadge = `Con thứ ${member.orderInFamily}`;
+      roleBadge = hasParentsInClan
+        ? `Con thứ ${member.orderInFamily}`
+        : `Rể thứ ${member.orderInFamily}`;
     } else {
-      roleBadge = member.spouseId ? `Dâu thứ ${member.orderInFamily}` : `Con gái thứ ${member.orderInFamily}`;
+      roleBadge = hasParentsInClan
+        ? `Con gái thứ ${member.orderInFamily}`
+        : `Dâu thứ ${member.orderInFamily}`;
+    }
+  } else if (member.spouseId) {
+    const hasParentsInClan = Boolean(member.fatherId || member.motherId);
+    if (!hasParentsInClan) {
+      roleBadge = isMale ? "Rể" : "Dâu";
+    } else {
+      roleBadge = isMale ? "Con trai" : "Con gái";
     }
   } else if (member.nickname) {
     roleBadge = member.nickname;
