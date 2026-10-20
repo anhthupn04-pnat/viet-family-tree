@@ -3,6 +3,10 @@ import fs from "fs";
 import path from "path";
 
 // In Vercel serverless environment, copy SQLite database to writable /tmp
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = "file:./dev.db";
+}
+
 if (process.env.VERCEL) {
   try {
     const tmpDbPath = path.join("/tmp", "dev.db");
