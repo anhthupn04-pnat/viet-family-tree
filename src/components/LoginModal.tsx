@@ -23,7 +23,7 @@ export default function LoginModal({
 
   const handleFillAdmin = () => {
     setEmail("anhthuphan0102@gmail.com");
-    setPassword("01022004");
+    setPassword("010204");
     setError(null);
   };
 
@@ -36,7 +36,7 @@ export default function LoginModal({
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: email.trim(), password: password.trim() }),
       });
 
       const data = await res.json();
@@ -67,7 +67,7 @@ export default function LoginModal({
                 Đăng Nhập Quản Trị Viên
               </h2>
               <p className="text-[11px] text-amber-100/70">
-                Gia Phả Việt — VietFamilyTree
+                Gia phả dòng họ
               </p>
             </div>
           </div>
