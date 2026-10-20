@@ -165,7 +165,7 @@ export async function POST(request: Request) {
         status: memberStatus,
         submitterName: submitterName?.trim() || (isAdmin ? "Ban Quản Trị" : "Cộng đồng đề xuất"),
         submitterNote: submitterNote?.trim() || null,
-      },
+      } as any,
     });
 
     // Nếu có chọn vợ/chồng
@@ -240,7 +240,7 @@ export async function PUT(request: Request) {
     if (action === "APPROVE") {
       const approved = await prisma.memberProfile.update({
         where: { id },
-        data: { status: "approved", isVerified: true },
+        data: { status: "approved", isVerified: true } as any,
       });
       return NextResponse.json({
         success: true,
@@ -252,7 +252,7 @@ export async function PUT(request: Request) {
     if (action === "REJECT") {
       const rejected = await prisma.memberProfile.update({
         where: { id },
-        data: { status: "rejected" },
+        data: { status: "rejected" } as any,
       });
       return NextResponse.json({
         success: true,

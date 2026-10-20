@@ -9,14 +9,14 @@ export async function GET(request: Request) {
 
     if (!token) {
       // Admin query: list all invites
-      const invites = await prisma.invite.findMany({
+      const invites = await (prisma as any).invite.findMany({
         orderBy: { createdAt: "desc" },
         include: { clan: { select: { id: true, name: true } } },
       });
       return NextResponse.json({ invites });
     }
 
-    const invite = await prisma.invite.findUnique({
+    const invite = await (prisma as any).invite.findUnique({
       where: { token },
       include: { clan: { select: { id: true, name: true, couplet1: true, couplet2: true } } },
     });
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     const token = crypto.randomBytes(16).toString("hex");
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days validity
 
-    const newInvite = await prisma.invite.create({
+    const newInvite = await (prisma as any).invite.create({
       data: {
         clanId: clan.id,
         token,
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
         email: email?.trim() || null,
         expiresAt,
         createdBy: creatorEmail,
-      },
+      } as any,
     });
 
     return NextResponse.json({
