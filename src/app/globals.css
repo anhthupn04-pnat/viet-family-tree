@@ -5,81 +5,37 @@
 
 @layer base {
   :root {
-    --bg-cream: #FDFBF7;
-    --jade-dark: #1E5F52;
-    --jade-base: #2B7A6A;
-    --jade-light: #3D9986;
-    --imperial-red: #C62828;
-    --imperial-red-dark: #9E1B1B;
-    --gold-trim: #E0A926;
-    --gold-light: #FADB7F;
-    --lotus-pink: #F06292;
-    --lotus-pink-light: #FCE4EC;
-    --sage-line: #94A3B8;
+    --bg-clean: #F8FAFC;
+    --primary-blue: #2563EB;
+    --primary-rose: #F43F5E;
+    --slate-border: #E2E8F0;
   }
 }
 
 body {
-  background-color: #FDFBF7;
-  color: #1E293B;
+  background-color: #F8FAFC;
+  color: #0F172A;
   font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   overflow-x: hidden;
 }
 
-/* Nền chính ngà sáng (#FCFBF7) với hoa văn Trống Đồng Đông Sơn, Chim Hạc & Vân Mây chìm mờ */
-.bg-lotus-watermark {
-  background-color: #FCFBF7;
-  background-image: 
-    radial-gradient(#E8DEC7 0.75px, transparent 0.75px),
-    url("data:image/svg+xml,%3Csvg width='180' height='180' viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%232B7A6A' fill-opacity='0.055' fill-rule='evenodd'%3E%3C!-- Trống đồng Đông Sơn: Mặt trời 12 tia --%3E%3Ccircle cx='90' cy='90' r='14' fill='none' stroke='%232B7A6A' stroke-width='1.5' stroke-opacity='0.06'/%3E%3Cpath d='M90 70 L93 84 L90 82 L87 84 Z M90 110 L93 96 L90 98 L87 96 Z M70 90 L84 93 L82 90 L84 87 Z M110 90 L96 93 L98 90 L96 87 Z'/%3E%3Ccircle cx='90' cy='90' r='38' fill='none' stroke='%232B7A6A' stroke-width='1' stroke-opacity='0.06' stroke-dasharray='3,3'/%3E%3Ccircle cx='90' cy='90' r='60' fill='none' stroke='%232B7A6A' stroke-width='1.5' stroke-opacity='0.06'/%3E%3C!-- Chim Hạc bay ngược chiều kim đồng hồ quanh trống đồng --%3E%3Cpath d='M85 24 C 95 18, 105 20, 115 16 C 108 22, 102 24, 98 28 C 94 32, 88 34, 82 30 C 84 28, 85 26, 85 24 Z'/%3E%3Cpath d='M24 95 C 18 85, 20 75, 16 65 C 22 72, 24 78, 28 82 C 32 86, 34 92, 30 98 C 28 96, 26 95, 24 95 Z'/%3E%3Cpath d='M95 156 C 85 162, 75 160, 65 164 C 72 158, 74 152, 78 148 C 82 144, 84 138, 90 142 C 88 144, 87 146, 85 148 Z'/%3E%3Cpath d='M156 85 C 162 95, 160 105, 164 115 C 158 108, 152 106, 148 102 C 144 98, 138 96, 142 90 C 144 92, 146 93, 148 95 Z'/%3E%3C!-- Vân mây cổ & cánh sen --%3E%3Cpath d='M10 10 Q 18 4, 26 10 Q 32 16, 26 22 Q 18 20, 14 16 Z'/%3E%3Cpath d='M170 170 Q 162 164, 154 170 Q 148 176, 154 182 Q 162 180, 166 176 Z'/%3E%3C/g%3E%3C/svg%3E");
-  background-size: 24px 24px, 180px 180px;
+/* Clean background without noisy patterns */
+.bg-clean-light {
+  background-color: #F8FAFC;
 }
 
-/* Scroll chiếu thư cổ Imperial Scroll */
-.imperial-scroll {
-  background: linear-gradient(135deg, #C62828 0%, #B71C1C 50%, #8E1515 100%);
-  border: 2px solid #E0A926;
-  box-shadow: 0 10px 25px -5px rgba(198, 40, 40, 0.3), 0 0 0 1px rgba(224, 169, 38, 0.4);
-}
-
-/* Thẻ bài ngọc bích Jade Card */
-.jade-card {
-  background: linear-gradient(145deg, #1E5F52 0%, #2B7A6A 100%);
-  color: #FFFFFF;
-  border: 1px solid rgba(224, 169, 38, 0.3);
-  box-shadow: 0 8px 20px -4px rgba(30, 95, 82, 0.25);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.jade-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 14px 28px -4px rgba(30, 95, 82, 0.35);
-  border-color: #E0A926;
-}
-
-/* Đường nối cây gia phả trực giao (Orthogonal Tree Connectors) */
-.tree-connector-v {
-  width: 2px;
-  background-color: #8CA397;
-}
-
-.tree-connector-h {
-  height: 2px;
-  background-color: #8CA397;
-}
-
-/* Custom scrollbar thanh lịch */
+/* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #FDFBF7;
+  background: #F1F5F9;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2B7A6A;
+  background: #94A3B8;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #C62828;
+  background: #64748B;
 }

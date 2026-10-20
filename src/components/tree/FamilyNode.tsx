@@ -6,301 +6,213 @@ import {
   User,
   Heart,
   Plus,
-  Info,
   Edit2,
-  Flower2,
-  Award,
-  Sparkles,
+  Info,
   ChevronDown,
   UserPlus,
   Baby,
-  Users2,
 } from "lucide-react";
-import { MemberNode } from "@/components/FamilyTreeCanvas";
+import { Member } from "@/types/family";
 
 interface FamilyNodeProps {
   data: {
-    member: MemberNode;
-    isAdmin: boolean;
+    member: Member;
+    onSelectMember: (member: Member) => void;
+    onQuickAddChild: (parent: Member) => void;
+    onQuickAddSpouse: (spouse: Member) => void;
+    onEditMember: (member: Member) => void;
     isFocused?: boolean;
-    onSelectMember: (member: MemberNode) => void;
-    onQuickAdd: (type: "child" | "spouse" | "parent", targetMember: MemberNode) => void;
-    onEditMember: (member: MemberNode) => void;
   };
 }
 
 export default function FamilyNode({ data }: FamilyNodeProps) {
-  const { member, isAdmin, isFocused, onSelectMember, onQuickAdd, onEditMember } = data;
-  const [showQuickMenu, setShowQuickMenu] = useState(false);
+  const {
+    member,
+    onSelectMember,
+    onQuickAddChild,
+    onQuickAddSpouse,
+    onEditMember,
+    isFocused,
+  } = data;
+  const [showMenu, setShowMenu] = useState(false);
 
-  const isMale = (member.gender || "MALE").toUpperCase() === "MALE";
-  const birthYear = member.birthSolar
-    ? new Date(member.birthSolar).getFullYear()
-    : member.birthLunar
-    ? member.birthLunar.split("/")[2] || null
-    : null;
-
-  const deathYear = member.deathSolar
-    ? new Date(member.deathSolar).getFullYear()
-    : member.deathLunar
-    ? member.deathLunar.split("/")[2] || null
-    : null;
-
-  const achievementsCount = (member as any).achievements?.length || 0;
+  const isMale = member.gender === "male";
+  const borderColor = isMale ? "border-blue-600" : "border-rose-500";
+  const badgeBg = isMale ? "bg-blue-600 text-white" : "bg-rose-500 text-white";
+  const avatarBg = isMale
+    ? "bg-blue-50 text-blue-600 border-blue-200"
+    : "bg-rose-50 text-rose-600 border-rose-200";
 
   return (
     <div
-      className={`relative group rounded-xl transition-all duration-200 select-none ${
-        isFocused
-          ? "ring-4 ring-[#C62828] shadow-2xl scale-105"
-          : "hover:shadow-xl hover:-translate-y-1"
+      className={`relative group bg-white rounded-xl shadow-sm transition-all duration-200 select-none ${
+        isFocused ? "ring-4 ring-amber-500 scale-105 shadow-xl" : "hover:shadow-md"
       }`}
-      style={{ width: 220, minHeight: 140 }}
+      style={{ width: 170, minHeight: 230 }}
       onClick={() => onSelectMember(member)}
     >
-      {/* Handles for connections */}
-      {/* Top Handle for Parent-to-Child descent */}
+      {/* Top Handle for Parent-to-Child orthogonal line */}
       <Handle
         type="target"
         position={Position.Top}
-        className="!w-2.5 !h-2.5 !bg-[#8B1D1D] !border-2 !border-white shadow-sm"
+        className="!w-2.5 !h-2.5 !bg-slate-700 !border-2 !border-white shadow-xs"
       />
 
-      {/* Bottom Handle for Parent to Children */}
+      {/* Bottom Handle for Children descent */}
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!w-2.5 !h-2.5 !bg-[#8B1D1D] !border-2 !border-white shadow-sm"
+        className="!w-2.5 !h-2.5 !bg-slate-700 !border-2 !border-white shadow-xs"
       />
 
-      {/* Left Handle for Spouse connection */}
+      {/* Left/Right handles for couple connections */}
       <Handle
         type="target"
         id="spouse-left"
         position={Position.Left}
-        className="!w-2 !h-2 !bg-[#E11D48] !border-2 !border-white shadow-sm"
+        className="!w-2 !h-2 !bg-rose-400 !border !border-white"
       />
-
-      {/* Right Handle for Spouse connection */}
       <Handle
         type="source"
         id="spouse-right"
         position={Position.Right}
-        className="!w-2 !h-2 !bg-[#E11D48] !border-2 !border-white shadow-sm"
+        className="!w-2 !h-2 !bg-rose-400 !border !border-white"
       />
 
-      {/* Card Body */}
+      {/* Main Card Body */}
       <div
-        className={`w-full h-full rounded-xl p-3 border shadow-md flex flex-col justify-between transition-colors ${
-          isMale
-            ? "bg-gradient-to-b from-[#F0F7FF] via-white to-[#F8FAFC] border-[#BFDBFE]"
-            : "bg-gradient-to-b from-[#FFF1F2] via-white to-[#FFF5F5] border-[#FECDD3]"
-        }`}
+        className={`w-full h-full rounded-xl border-2 ${borderColor} p-3 flex flex-col items-center justify-between text-center`}
       >
-        {/* Top Header Badge */}
-        <div className="flex items-center justify-between gap-1 mb-1.5">
-          <div className="flex items-center gap-1">
+        {/* Square Avatar */}
+        <div
+          className={`w-20 h-20 rounded-lg border flex items-center justify-center overflow-hidden shrink-0 shadow-2xs mt-1 ${avatarBg}`}
+        >
+          {member.avatarUrl ? (
+            <img
+              src={member.avatarUrl}
+              alt={member.fullName}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <User className="w-10 h-10 opacity-80" />
+          )}
+        </div>
+
+        {/* 3 Information Lines */}
+        <div className="w-full my-2 space-y-1">
+          {/* Dòng 1: Nhãn thế hệ: ĐỜI 1, ĐỜI 2... */}
+          <div className="flex items-center justify-center">
             <span
-              className={`text-[10px] font-bold px-1.5 py-0.5 rounded shadow-xs ${
-                isMale
-                  ? "bg-[#1E40AF] text-white"
-                  : "bg-[#9F1239] text-white"
-              }`}
+              className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded shadow-2xs ${badgeBg}`}
             >
-              Đời {member.generation}
+              ĐỜI {member.generation}
             </span>
-            {member.birthOrder && (
-              <span className="text-[10px] font-medium text-amber-800 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded truncate max-w-[85px]">
-                {member.birthOrder}
+          </div>
+
+          {/* Dòng 2: HỌ VÀ TÊN (in hoa đậm) */}
+          <h4
+            className="text-[13px] font-extrabold text-slate-900 uppercase tracking-tight truncate leading-tight pt-0.5"
+            title={member.fullName}
+          >
+            {member.fullName}
+          </h4>
+
+          {/* Biệt danh / Tên thường gọi (nếu có) */}
+          {member.nickname && (
+            <p className="text-[11px] text-amber-700 italic truncate font-medium">
+              ({member.nickname})
+            </p>
+          )}
+
+          {/* Dòng 3: NS: dd/mm/yyyy (và ngày mất nếu đã khuất) */}
+          <div className="text-[10px] text-slate-500 font-medium truncate pt-0.5">
+            <span>
+              NS: {member.birthDate || "---"}
+            </span>
+            {!member.isAlive && (
+              <span className="block text-slate-600">
+                Mất: {member.deathDate || "---"}
               </span>
             )}
           </div>
-
-          {/* Status Badge */}
-          {member.isAlive ? (
-            <span className="flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Sống
-            </span>
-          ) : (
-            <span className="flex items-center gap-1 text-[10px] font-medium text-amber-900 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
-              <Flower2 className="w-2.5 h-2.5 text-amber-700" />
-              Đã mất
-            </span>
-          )}
         </div>
 
-        {/* Member Identity: Avatar + Names */}
-        <div className="flex items-start gap-2.5 my-1">
-          {/* Avatar Icon */}
-          <div
-            className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border-2 shadow-xs overflow-hidden ${
-              member.avatarUrl
-                ? "border-amber-400 bg-amber-50"
-                : isMale
-                ? "bg-gradient-to-tr from-[#2563EB] to-[#60A5FA] border-blue-200 text-white"
-                : "bg-gradient-to-tr from-[#E11D48] to-[#FB7185] border-rose-200 text-white"
-            }`}
-          >
-            {member.avatarUrl ? (
-              <img
-                src={member.avatarUrl}
-                alt={member.fullName}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <User className="w-5 h-5" />
+        {/* Quick Action Toolbar on Node */}
+        <div
+          className="w-full pt-1.5 border-t border-slate-100 flex items-center justify-center gap-1.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Quick Menu Dropdown Button */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowMenu(!showMenu)}
+              className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+              title="Thao tác nhanh"
+            >
+              <Plus className="w-3 h-3 text-blue-600" />
+              <span>Thêm</span>
+              <ChevronDown className="w-2.5 h-2.5 opacity-60" />
+            </button>
+
+            {/* Menu Popup */}
+            {showMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-30"
+                  onClick={() => setShowMenu(false)}
+                />
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-44 bg-white rounded-lg shadow-xl border border-slate-200 py-1 z-40 text-left text-xs">
+                  <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                    Thêm quan hệ
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMenu(false);
+                      onQuickAddSpouse(member);
+                    }}
+                    className="w-full px-2.5 py-1.5 text-rose-700 hover:bg-rose-50 flex items-center gap-2 font-medium"
+                  >
+                    <Heart className="w-3.5 h-3.5 text-rose-500" />
+                    + Thêm Vợ/Chồng
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMenu(false);
+                      onQuickAddChild(member);
+                    }}
+                    className="w-full px-2.5 py-1.5 text-blue-700 hover:bg-blue-50 flex items-center gap-2 font-medium"
+                  >
+                    <Baby className="w-3.5 h-3.5 text-blue-500" />
+                    + Thêm Con (Đời {member.generation + 1})
+                  </button>
+                </div>
+              </>
             )}
           </div>
 
-          {/* Names Info */}
-          <div className="flex-1 min-w-0">
-            <h4 className="text-[13px] font-bold text-gray-900 truncate leading-snug font-serif tracking-tight group-hover:text-[#8B1D1D] transition-colors">
-              {member.fullName}
-            </h4>
-
-            {/* Nickname / Tên thường gọi ở nhà in nghiêng */}
-            {member.nickname ? (
-              <p className="text-[11px] italic font-medium text-amber-700 truncate leading-tight mt-0.5">
-                &ldquo;{member.nickname}&rdquo;
-              </p>
-            ) : member.courtesyName ? (
-              <p className="text-[10px] text-gray-500 italic truncate leading-tight mt-0.5">
-                {member.courtesyName}
-              </p>
-            ) : null}
-
-            {/* Years / Life Span */}
-            <p className="text-[10px] text-gray-500 mt-0.5">
-              {birthYear || deathYear ? (
-                <span>
-                  {birthYear || "?"} &ndash; {member.isAlive ? "nay" : deathYear || "?"}
-                </span>
-              ) : (
-                <span className="text-gray-400">Chưa rõ năm</span>
-              )}
-            </p>
-          </div>
-        </div>
-
-        {/* Footer info: Death anniversary & achievements */}
-        <div className="flex items-center justify-between pt-1 border-t border-gray-100 text-[10px] text-gray-500">
-          {!member.isAlive && ((member as any).deathLunarDay || member.deathLunar) ? (
-            <span className="text-amber-800 font-medium truncate max-w-[130px]">
-              Giỗ: {(member as any).deathLunarDay ? `${(member as any).deathLunarDay}/${(member as any).deathLunarMonth} ÂL` : member.deathLunar}
-            </span>
-          ) : member.branchName ? (
-            <span className="text-blue-700 font-medium truncate max-w-[130px]">
-              {member.branchName}
-            </span>
-          ) : (
-            <span className="text-gray-400">Chi tộc chính</span>
-          )}
-
-          {achievementsCount > 0 && (
-            <span className="flex items-center gap-0.5 text-amber-700 bg-amber-50 px-1 py-0.2 rounded font-semibold text-[9px] border border-amber-200">
-              <Award className="w-2.5 h-2.5 text-amber-600" />
-              {achievementsCount}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Floating Action Buttons Toolbar directly on Node */}
-      <div
-        className="absolute -bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white/95 backdrop-blur-md px-2 py-0.5 rounded-full border border-gray-200 shadow-md opacity-90 group-hover:opacity-100 group-hover:shadow-lg transition-all z-10"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Quick Add Button with Dropdown Popup */}
-        <div className="relative">
+          {/* Edit button */}
           <button
             type="button"
-            title="Thao tác nhanh phả hệ"
-            onClick={() => setShowQuickMenu(!showQuickMenu)}
-            className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold text-white bg-gradient-to-r from-[#8B1D1D] to-[#B91C1C] hover:from-[#701515] hover:to-[#991B1B] shadow-xs cursor-pointer transition-transform active:scale-95"
-          >
-            <Plus className="w-3 h-3" />
-            <span>Thêm</span>
-            <ChevronDown className="w-2.5 h-2.5 opacity-80" />
-          </button>
-
-          {/* Quick Menu Popup */}
-          {showQuickMenu && (
-            <>
-              {/* Backdrop closer */}
-              <div
-                className="fixed inset-0 z-30"
-                onClick={() => setShowQuickMenu(false)}
-              />
-              <div className="absolute bottom-full left-0 mb-1.5 w-44 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-40 text-left animate-in fade-in zoom-in-95 duration-100">
-                <div className="px-2.5 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
-                  Thêm từ {member.fullName.split(" ").slice(-1)[0]}
-                </div>
-                
-                {/* 1. Add Spouse */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowQuickMenu(false);
-                    onQuickAdd("spouse", member);
-                  }}
-                  className="w-full px-2.5 py-1.5 text-xs text-rose-700 hover:bg-rose-50 flex items-center gap-2 transition-colors font-medium"
-                >
-                  <Heart className="w-3.5 h-3.5 text-rose-500" />
-                  + Thêm Vợ / Chồng
-                </button>
-
-                {/* 2. Add Child */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowQuickMenu(false);
-                    onQuickAdd("child", member);
-                  }}
-                  className="w-full px-2.5 py-1.5 text-xs text-blue-700 hover:bg-blue-50 flex items-center gap-2 transition-colors font-medium"
-                >
-                  <Baby className="w-3.5 h-3.5 text-blue-500" />
-                  + Thêm Con (Đời {member.generation + 1})
-                </button>
-
-                {/* 3. Add Parent */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowQuickMenu(false);
-                    onQuickAdd("parent", member);
-                  }}
-                  className="w-full px-2.5 py-1.5 text-xs text-amber-800 hover:bg-amber-50 flex items-center gap-2 transition-colors font-medium"
-                >
-                  <UserPlus className="w-3.5 h-3.5 text-amber-600" />
-                  + Thêm Cha / Mẹ (Đời {Math.max(1, member.generation - 1)})
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Info button */}
-        <button
-          type="button"
-          title="Xem chi tiết & thành tích"
-          onClick={() => onSelectMember(member)}
-          className="p-1 rounded-full text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-        >
-          <Info className="w-3 h-3" />
-        </button>
-
-        {/* Edit button (Admin only) */}
-        {isAdmin && (
-          <button
-            type="button"
-            title="Chỉnh sửa hồ sơ"
             onClick={() => onEditMember(member)}
-            className="p-1 rounded-full text-gray-500 hover:text-amber-700 hover:bg-amber-50 transition-colors"
+            className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+            title="Chỉnh sửa thông tin"
           >
             <Edit2 className="w-3 h-3" />
           </button>
-        )}
+
+          {/* Info button */}
+          <button
+            type="button"
+            onClick={() => onSelectMember(member)}
+            className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+            title="Xem hồ sơ chi tiết"
+          >
+            <Info className="w-3 h-3" />
+          </button>
+        </div>
       </div>
     </div>
   );

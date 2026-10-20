@@ -1,36 +1,20 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Header from "@/components/Header";
 import FamilyTreeCanvas from "@/components/FamilyTreeCanvas";
 import MemberListView from "@/components/MemberListView";
 import AdminView from "@/components/AdminView";
 import MemberDetailDrawer from "@/components/MemberDetailDrawer";
-import MemberFormModal from "@/components/MemberFormModal";
+import MemberFormModal, { QuickContext } from "@/components/MemberFormModal";
 import LoginModal from "@/components/LoginModal";
-import CreateClanModal from "@/components/CreateClanModal";
-import InviteModal from "@/components/InviteModal";
 import KinshipCalculatorModal from "@/components/KinshipCalculatorModal";
-import HistoryModal from "@/components/HistoryModal";
 import AnniversariesModal from "@/components/AnniversariesModal";
 import AnniversariesView from "@/components/AnniversariesView";
 import LotusFooter from "@/components/LotusFooter";
-import { MOCK_MEMBERS } from "@/lib/mockData";
-import {
-  ShieldCheck,
-  Eye,
-  CheckCircle2,
-  X,
-  FileCheck2,
-  Sparkles,
-} from "lucide-react";
-import {
-  getLocalMembers,
-  saveLocalMembers,
-  recordLocalMemberDeleted,
-  recordLocalMemberSaved,
-  mergeServerWithLocal,
-} from "@/lib/treeStorage";
+import { Member } from "@/types/family";
+import { FamilyStoreProvider, useFamilyStore } from "@/lib/family-store";
+import { CheckCircle2, X, Compass, Sparkles } from "lucide-react";
 
 export interface CurrentUser {
   id: string;
@@ -53,69 +37,27 @@ const DEFAULT_ADMIN: CurrentUser = {
   role: "ADMIN",
 };
 
-export default function HomePage() {
+function HomePageContent() {
+  const { members } = useFamilyStore();
   const [currentUser, setCurrentUser] = useState<CurrentUser>(DEFAULT_GUEST);
-  // Default to Family Tree Canvas as requested
   const [activeTab, setActiveTab] = useState<string>("tree");
 
-  // Clan and stats state
-  const [clan, setClan] = useState<any>(null);
-  const [stats, setStats] = useState<any>({
-    totalMembers: 0,
-    totalBranches: 4,
-    totalGenerations: 5,
-    aliveCount: 0,
-    deceasedCount: 0,
-    maleCount: 0,
-    femaleCount: 0,
-  });
-  const [branches, setBranches] = useState<any[]>([]);
-  const [allMembers, setAllMembers] = useState<any[]>([]);
-  const [pendingCount, setPendingCount] = useState<number>(0);
-
-  // Modals state
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const [showCreateClanModal, setShowCreateClanModal] = useState(false);
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [showMemberFormModal, setShowMemberFormModal] = useState(false);
-  const [editingMember, setEditingMember] = useState<any | null>(null);
-  const [selectedMember, setSelectedMember] = useState<any | null>(null);
-  const [showKinshipModal, setShowKinshipModal] = useState(false);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [showAnniversariesModal, setShowAnniversariesModal] = useState(false);
-  const [kinshipPreselectedA, setKinshipPreselectedA] = useState<string | undefined>();
-  const [kinshipPreselectedB, setKinshipPreselectedB] = useState<string | undefined>();
+  // Selection & Focus
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [focusedMemberId, setFocusedMemberId] = useState<string | null>(null);
-  const [treeRefreshKey, setTreeRefreshKey] = useState<number>(0);
-  const [latestSavedMember, setLatestSavedMember] = useState<any | null>(null);
-  const [quickActionContext, setQuickActionContext] = useState<any | null>(null);
 
-  // Toast notification state
+  // Form Modal States
+  const [showMemberFormModal, setShowMemberFormModal] = useState(false);
+  const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [quickContext, setQuickContext] = useState<QuickContext | null>(null);
+
+  // Other Modals
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showKinshipModal, setShowKinshipModal] = useState(false);
+  const [showAnniversariesModal, setShowAnniversariesModal] = useState(false);
+
+  // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  const handleResetMockData = () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("gia_pha_members_cache");
-      localStorage.removeItem("gia_pha_deleted_ids");
-      localStorage.removeItem("gia_pha_dirty_members");
-      saveLocalMembers(MOCK_MEMBERS as any[]);
-    }
-    setAllMembers(MOCK_MEMBERS as any[]);
-    setLatestSavedMember(null);
-    setTreeRefreshKey(Date.now());
-    showToast("Đã khôi phục Cây Mẫu 4 thế hệ chuẩn ban đầu thành công!");
-  };
-
-  // Guest Propose Change Modal
-  const [showProposeModal, setShowProposeModal] = useState(false);
-  const [proposingMember, setProposingMember] = useState<any | null>(null);
-  const [proposeRequesterName, setProposeRequesterName] = useState("");
-  const [proposeRequesterEmail, setProposeRequesterEmail] = useState("");
-  const [proposeReason, setProposeReason] = useState("");
-  const [proposeEvidence, setProposeEvidence] = useState("");
-  const [proposeData, setProposeData] = useState("");
-  const [proposeSubmitting, setProposeSubmitting] = useState(false);
-  const [proposeMsg, setProposeMsg] = useState<string | null>(null);
 
   const isAdmin = currentUser.role === "ADMIN";
 
@@ -123,414 +65,136 @@ export default function HomePage() {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
-    }, 5000);
+    }, 4000);
   };
 
-  // Refresh all application data (tree canvas, member list, branches, pending count)
-  const refreshAllData = () => {
-    const t = Date.now();
-    setTreeRefreshKey(t);
-    fetchClanData(t);
-    fetchBranches(t);
-    fetchMembersList(t);
-    fetchPendingCount(t);
+  // Quick Action Handlers
+  const handleSelectMember = (m: Member) => {
+    setSelectedMember(m);
+    setFocusedMemberId(m.id);
   };
 
-  // Fetch initial clan data & branches with cache-busting
-  const fetchClanData = async (t?: number) => {
-    try {
-      const ts = t || Date.now();
-      const res = await fetch(`/api/clans?_t=${ts}`, {
-        cache: "no-store",
-        headers: { "Cache-Control": "no-cache" },
-      });
-      const data = await res.json();
-      if (data.clan) {
-        setClan(data.clan);
-      }
-      if (data.stats) {
-        setStats(data.stats);
-      }
-    } catch (e) {
-      console.error("Error fetching clan:", e);
-    }
+  const handleEditMember = (m: Member) => {
+    setEditingMember(m);
+    setQuickContext(null);
+    setShowMemberFormModal(true);
   };
 
-  const fetchBranches = async (t?: number) => {
-    try {
-      const ts = t || Date.now();
-      const res = await fetch(`/api/branches?_t=${ts}`, {
-        cache: "no-store",
-        headers: { "Cache-Control": "no-cache" },
-      });
-      const data = await res.json();
-      if (data.branches) {
-        setBranches(data.branches);
-      }
-    } catch (e) {
-      console.error("Error fetching branches:", e);
-    }
+  const handleQuickAddChild = (parent: Member) => {
+    setEditingMember(null);
+    setQuickContext({ type: "child", targetMember: parent });
+    setShowMemberFormModal(true);
   };
 
-  const fetchMembersList = async (t?: number) => {
-    try {
-      const ts = t || Date.now();
-      const res = await fetch(`/api/members?_t=${ts}`, {
-        cache: "no-store",
-        headers: { "Cache-Control": "no-cache" },
-      });
-      const data = await res.json();
-      if (data.members) {
-        // Hợp nhất dữ liệu server với các chỉnh sửa và xóa đã lưu ở localStorage
-        const merged = mergeServerWithLocal(data.members);
-        setAllMembers(merged);
-      }
-    } catch (e) {
-      console.error("Error fetching members:", e);
-      // Fallback về dữ liệu cục bộ nếu server gặp lỗi
-      const local = getLocalMembers();
-      if (local && local.length > 0) {
-        setAllMembers(local);
-      }
-    }
+  const handleQuickAddSpouse = (spouse: Member) => {
+    setEditingMember(null);
+    setQuickContext({ type: "spouse", targetMember: spouse });
+    setShowMemberFormModal(true);
   };
 
-  const fetchPendingCount = async (t?: number) => {
-    try {
-      const ts = t || Date.now();
-      const [resM, resR] = await Promise.all([
-        fetch(`/api/members?status=pending&_t=${ts}`, {
-          cache: "no-store",
-          headers: { "Cache-Control": "no-cache" },
-        }),
-        fetch(`/api/change-requests?_t=${ts}`, {
-          cache: "no-store",
-          headers: { "Cache-Control": "no-cache" },
-        }),
-      ]);
-      const dataM = await resM.json();
-      const dataR = await resR.json();
-      const pM = (dataM.members || []).length;
-      const pR = (dataR.requests || []).filter((r: any) => r.status === "PENDING").length;
-      setPendingCount(pM + pR);
-    } catch (e) {
-      console.error("Error fetching pending count:", e);
-    }
-  };
-
-  // Handle invite links on mount: ?invite=<token>
-  useEffect(() => {
-    // 1. Tải ngay lập tức dữ liệu thành viên đã lưu từ localStorage để không bị trễ hoặc load lại từ đầu
-    const local = getLocalMembers();
-    if (local && local.length > 0) {
-      setAllMembers(local);
-    }
-
-    // 2. Tải dữ liệu server nền
-    fetchClanData();
-    fetchBranches();
-    fetchMembersList();
-    fetchPendingCount();
-
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const token = params.get("invite");
-      if (token) {
-        fetch(`/api/invites?token=${token}`)
-          .then((res) => res.json())
-          .then((data) => {
-            if (data.success && data.invite) {
-              setCurrentUser({
-                id: `invited-${token.slice(0, 8)}`,
-                email: "thanhvien@giaphaviet.vn",
-                name: "Thành viên dòng họ",
-                role: data.invite.role || "MEMBER",
-              });
-              showToast("Chào mừng bạn đã tham gia Gia phả dòng họ qua liên kết mời!");
-            }
-          })
-          .catch(console.error);
-      }
-    }
-  }, []);
-
-  // Quick switch role
-  const handleSwitchRole = (role: "ADMIN" | "GUEST") => {
-    if (role === "ADMIN") {
-      setCurrentUser(DEFAULT_ADMIN);
-    } else {
-      setCurrentUser(DEFAULT_GUEST);
-      if (activeTab === "admin") {
-        setActiveTab("tree");
-      }
-    }
-  };
-
-  // Delete member
-  const handleDeleteMember = async (id: string, name: string) => {
-    if (!isAdmin) {
-      showToast("Chỉ Quản trị viên mới có quyền xóa hồ sơ.");
-      return;
-    }
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa hồ sơ của "${name}" không?`)) {
-      return;
-    }
-
-    try {
-      // 1. Ghi nhận xóa vĩnh viễn vào localStorage để không bao giờ bị load lại từ đầu
-      recordLocalMemberDeleted(id);
-      setSelectedMember(null);
-      setLatestSavedMember(null);
-      setAllMembers((prev) => prev.filter((m) => m.id !== id));
-
-      // 2. Đồng bộ lệnh xóa lên API server / Supabase
-      const res = await fetch(`/api/members?id=${id}`, { method: "DELETE" });
-      const data = await res.json();
-      showToast(data.message || "Đã xóa hồ sơ thành viên thành công.");
-      refreshAllData();
-    } catch (err: any) {
-      console.warn("Delete request warning:", err);
-      showToast("Đã xóa hồ sơ thành viên khỏi gia phả.");
-      refreshAllData();
-    }
-  };
-
-  // Submit Propose Change
-  const handleProposeSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!proposeRequesterName.trim() || !proposeReason.trim() || !proposeEvidence.trim()) {
-      alert("Vui lòng điền đủ họ tên, lý do và nguồn tư liệu minh chứng.");
-      return;
-    }
-    setProposeSubmitting(true);
-    setProposeMsg(null);
-
-    try {
-      const res = await fetch("/api/change-requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          memberId: proposingMember?.id,
-          requesterName: proposeRequesterName,
-          requesterEmail: proposeRequesterEmail,
-          changeType: "UPDATE_PROFILE",
-          proposedData: proposeData || `Cập nhật thông tin cho ${proposingMember?.fullName}`,
-          reason: proposeReason,
-          evidenceSource: proposeEvidence,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Không thể gửi đề xuất.");
-
-      fetchPendingCount();
-      showToast("Yêu cầu của bạn đã được gửi tới Quản trị viên và đang chờ duyệt.");
-      setTimeout(() => {
-        setShowProposeModal(false);
-        setProposeMsg(null);
-      }, 1500);
-    } catch (err: any) {
-      alert(err.message || "Lỗi khi gửi đề xuất.");
-    } finally {
-      setProposeSubmitting(false);
-    }
+  const handleOpenAddMember = () => {
+    setEditingMember(null);
+    setQuickContext(null);
+    setShowMemberFormModal(true);
   };
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7] flex flex-col font-sans">
-      {/* Floating Toast Notification */}
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-between selection:bg-blue-600 selection:text-white">
+      {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#1E5F52] text-white px-5 py-3 rounded-2xl shadow-2xl border-2 border-[#E0A926] flex items-center space-x-3 animate-fade-in max-w-md w-11/12 sm:w-auto">
-          <CheckCircle2 className="w-5 h-5 text-[#FADB7F] shrink-0" />
-          <span className="font-semibold text-xs sm:text-sm font-serif">{toastMessage}</span>
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center space-x-2 border border-slate-700 animate-in fade-in slide-in-from-bottom-2">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <span className="text-xs font-medium">{toastMessage}</span>
           <button
             type="button"
             onClick={() => setToastMessage(null)}
-            className="ml-2 text-white/70 hover:text-white p-0.5 rounded-full hover:bg-white/10"
+            className="text-slate-400 hover:text-white ml-2"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* Dynamic Role Switcher Notice Bar with Lotus Accent */}
-      <div
-        className={`px-4 py-2 border-b text-xs flex flex-wrap items-center justify-between gap-3 shadow-2xs transition-colors ${
-          isAdmin
-            ? "bg-[#FEF3C7]/90 border-[#E0A926]/40 text-[#78350F]"
-            : "bg-[#FDFBF7] border-[#E8DEC7] text-stone-700"
-        }`}
-      >
-        <div className="max-w-7xl mx-auto w-full flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center space-x-2">
-            <span
-              className={`w-2.5 h-2.5 rounded-full ${
-                isAdmin ? "bg-[#1E5F52] animate-ping" : "bg-[#F06292]"
-              }`}
-            ></span>
-            <span className="font-semibold text-stone-900">
-              {isAdmin ? "Đang ở chế độ Quản Trị Viên (Admin):" : "Đang ở chế độ Khách / Thành Viên:"}
-            </span>
-            <span className="font-medium text-stone-600">
-              {isAdmin
-                ? "Toàn quyền thêm/sửa/xóa trực tiếp, tạo liên kết mời và phê duyệt thành viên mới."
-                : "Xem sơ đồ trực hệ, đóng góp thành viên mới (yêu cầu chờ Admin duyệt)."}
-            </span>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <span className="text-[11px] text-stone-500 hidden sm:inline">
-              Chuyển nhanh giao diện:
-            </span>
-            <button
-              type="button"
-              onClick={() => handleSwitchRole(isAdmin ? "GUEST" : "ADMIN")}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 ${
-                isAdmin
-                  ? "bg-white text-stone-700 hover:bg-stone-100 border border-amber-300"
-                  : "bg-[#1E5F52] text-white hover:bg-[#16483E] border border-[#E0A926]/40"
-              }`}
-            >
-              {isAdmin ? (
-                <>
-                  <Eye className="w-3.5 h-3.5 text-stone-600" />
-                  <span>Chuyển sang Giao diện Khách</span>
-                </>
-              ) : (
-                <>
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#FADB7F]" />
-                  <span>Chuyển sang Giao diện Admin</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Header */}
+      {/* Main Header */}
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         currentUser={currentUser}
-        onSwitchRole={handleSwitchRole}
-        onOpenLogin={() => setShowLoginModal(true)}
-        onOpenCreateClan={() => setShowCreateClanModal(true)}
-        onOpenCreateBranch={() => setActiveTab("admin")}
-        onOpenAddMember={() => {
-          setEditingMember(null);
-          setQuickActionContext(null);
-          setShowMemberFormModal(true);
+        onSwitchRole={(role) => {
+          setCurrentUser(role === "ADMIN" ? DEFAULT_ADMIN : DEFAULT_GUEST);
+          showToast(
+            `Đã chuyển sang chế độ ${
+              role === "ADMIN" ? "Quản trị viên (Admin)" : "Khách thăm quan"
+            }`
+          );
         }}
-        onOpenInvite={() => setShowInviteModal(true)}
-        onOpenHistory={() => setShowHistoryModal(true)}
+        onOpenLogin={() => setShowLoginModal(true)}
+        onOpenAddMember={handleOpenAddMember}
         onOpenAnniversaries={() => setShowAnniversariesModal(true)}
         onOpenKinship={() => setShowKinshipModal(true)}
-        onResetMockData={handleResetMockData}
-        onFocusMember={(memberId) => {
-          setFocusedMemberId(memberId);
-          setActiveTab("tree");
+        onFocusMember={(id) => {
+          setFocusedMemberId(id);
+          const found = members.find((m) => m.id === id);
+          if (found) setSelectedMember(found);
         }}
-        allMembers={allMembers}
-        pendingCount={pendingCount}
-        clanName={clan?.name || "Gia phả dòng họ"}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 w-full mx-auto">
-        {/* TAB 1: Cây gia phả trực hệ (Family Tree) */}
+      {/* Tab Contents */}
+      <main className="flex-1 w-full">
+        {/* TAB 1: Sơ đồ Cây Phả Hệ (Tree View) */}
         {activeTab === "tree" && (
-          <div className="w-full h-full">
+          <div className="w-full">
             <FamilyTreeCanvas
-              onSelectMember={(m) => {
-                setSelectedMember(m);
-              }}
-              onOpenAddMember={() => {
-                setEditingMember(null);
-                setQuickActionContext(null);
-                setShowMemberFormModal(true);
-              }}
-              onOpenQuickAdd={(type, targetMember) => {
-                setEditingMember(null);
-                setQuickActionContext({ type, targetMember });
-                setShowMemberFormModal(true);
-              }}
-              onEditMember={(m) => {
-                setEditingMember(m);
-                setQuickActionContext(null);
-                setShowMemberFormModal(true);
-              }}
-              onOpenKinshipForMember={(memberId) => {
-                setKinshipPreselectedA(memberId);
-                setKinshipPreselectedB(undefined);
-                setShowKinshipModal(true);
-              }}
-              onOpenKinshipForTwo={(memberAId, memberBId) => {
-                setKinshipPreselectedA(memberAId);
-                setKinshipPreselectedB(memberBId);
-                setShowKinshipModal(true);
-              }}
-              onOpenCreateClan={() => setShowCreateClanModal(true)}
+              onSelectMember={handleSelectMember}
+              onQuickAddChild={handleQuickAddChild}
+              onQuickAddSpouse={handleQuickAddSpouse}
+              onEditMember={handleEditMember}
+              onOpenAddMember={handleOpenAddMember}
               focusedMemberId={focusedMemberId}
-              isAdmin={isAdmin}
-              clanName={clan?.name || "Gia phả dòng họ"}
-              refreshKey={treeRefreshKey}
-              latestSavedMember={latestSavedMember}
             />
           </div>
         )}
 
-        {/* TAB 2: Danh sách thành viên (Members) */}
+        {/* TAB 2: Danh sách thành viên (Table View) */}
         {activeTab === "members" && (
           <div className="max-w-7xl mx-auto px-4 py-6">
             <MemberListView
-              onSelectMember={(m) => setSelectedMember(m)}
-              onEditMember={(m) => {
-                setEditingMember(m);
-                setQuickActionContext(null);
-                setShowMemberFormModal(true);
-              }}
-              onDeleteMember={handleDeleteMember}
-              onOpenAddMember={() => {
-                setEditingMember(null);
-                setQuickActionContext(null);
-                setShowMemberFormModal(true);
-              }}
-              onKinshipSearch={(memberId) => {
-                setKinshipPreselectedA(memberId);
-                setShowKinshipModal(true);
-              }}
-              isAdmin={isAdmin}
-              branches={branches}
-              refreshKey={treeRefreshKey}
+              onSelectMember={handleSelectMember}
+              onEditMember={handleEditMember}
+              onAddChild={handleQuickAddChild}
+              onOpenAddMember={handleOpenAddMember}
             />
           </div>
         )}
 
-        {/* TAB 3: Lịch Lễ Giỗ & Sự Kiện */}
+        {/* TAB 3: Lịch Lễ Giỗ */}
         {activeTab === "anniversaries" && (
           <div className="max-w-7xl mx-auto px-4 py-6">
             <AnniversariesView isAdmin={isAdmin} />
           </div>
         )}
 
-        {/* TAB 4: Tra Cứu Xưng Hô (Kinship) */}
+        {/* TAB 4: Tra Cứu Xưng Hô */}
         {activeTab === "kinship" && (
-          <div className="max-w-4xl mx-auto px-4 py-8">
-            <div className="bg-white rounded-2xl p-6 sm:p-8 shadow-xl border border-stone-200 text-center">
-              <div className="w-14 h-14 rounded-full bg-amber-100 border border-amber-300 flex items-center justify-center mx-auto mb-4 text-[#8B1E1E]">
-                <Sparkles className="w-7 h-7 text-[#E0A926]" />
+          <div className="max-w-3xl mx-auto px-4 py-12">
+            <div className="bg-white rounded-2xl p-8 shadow-sm border border-slate-200 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center mx-auto mb-4 text-blue-600">
+                <Compass className="w-7 h-7" />
               </div>
-              <h2 className="text-xl sm:text-2xl font-bold font-serif text-[#8B1E1E] mb-2">
-                Công Cụ Tra Cứu Quan Hệ Xưng Hô Dòng Họ
+              <h2 className="text-xl font-bold text-slate-900 mb-2">
+                Tra Cứu Quan Hệ Xưng Hô Dòng Họ
               </h2>
-              <p className="text-xs sm:text-sm text-stone-600 max-w-xl mx-auto mb-6">
-                Chọn 2 người bất kỳ trên cây gia phả để hệ thống thuật toán tự động tìm tổ tiên chung gần nhất (LCA) và xác định cách xưng hô chuẩn truyền thống Việt Nam.
+              <p className="text-xs sm:text-sm text-slate-500 max-w-lg mx-auto mb-6">
+                Chọn 2 người bất kỳ trên cây gia phả để hệ thống thuật toán tự
+                động tìm tổ tiên chung gần nhất (LCA) và xác định cách xưng hô
+                chuẩn văn hóa Việt Nam.
               </p>
               <button
                 type="button"
                 onClick={() => setShowKinshipModal(true)}
-                className="px-6 py-3 bg-gradient-to-r from-[#8B1D1D] to-[#B91C1C] hover:from-[#721515] hover:to-[#991B1B] text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg transition-all active:scale-95 cursor-pointer inline-flex items-center gap-2"
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer inline-flex items-center gap-2"
               >
+                <Sparkles className="w-4 h-4 text-amber-300" />
                 <span>Mở Bảng Tra Cứu Xưng Hô</span>
               </button>
             </div>
@@ -543,270 +207,82 @@ export default function HomePage() {
             <AdminView
               onNavigateTab={setActiveTab}
               onOpenCreateBranch={() => setActiveTab("admin")}
-              onOpenAddMember={() => {
-                setEditingMember(null);
-                setQuickActionContext(null);
-                setShowMemberFormModal(true);
+              onOpenAddMember={handleOpenAddMember}
+              onMemberApproved={() => {
+                showToast("Đã phê duyệt đề xuất thay đổi!");
               }}
-              onMemberApproved={refreshAllData}
             />
           </div>
         )}
       </main>
 
-      {/* Footer: Lotus Flower and Gentle Waves */}
+      {/* Footer */}
       <LotusFooter />
 
       {/* MODALS & DRAWERS */}
-      {/* 1. Login Modal */}
+      {/* 1. Member Detail Drawer */}
+      <MemberDetailDrawer
+        member={selectedMember}
+        onClose={() => setSelectedMember(null)}
+        onEdit={(m) => {
+          setSelectedMember(null);
+          handleEditMember(m);
+        }}
+        onAddChild={(parent) => {
+          setSelectedMember(null);
+          handleQuickAddChild(parent);
+        }}
+        onAddSpouse={(spouse) => {
+          setSelectedMember(null);
+          handleQuickAddSpouse(spouse);
+        }}
+      />
+
+      {/* 2. Member Add/Edit Form Modal */}
+      <MemberFormModal
+        isOpen={showMemberFormModal}
+        onClose={() => {
+          setShowMemberFormModal(false);
+          setEditingMember(null);
+          setQuickContext(null);
+        }}
+        editingMember={editingMember}
+        quickContext={quickContext}
+      />
+
+      {/* 3. Login Modal */}
       <LoginModal
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
         onLoginSuccess={(user) => {
           setCurrentUser(user);
           setShowLoginModal(false);
-          fetchPendingCount();
           showToast(`Đăng nhập thành công với vai trò ${user.role}!`);
         }}
       />
 
-      {/* 2. Create Clan Modal (Admin Only) */}
-      {isAdmin && (
-        <CreateClanModal
-          isOpen={showCreateClanModal}
-          onClose={() => setShowCreateClanModal(false)}
-          onSuccess={(newClan) => {
-            setClan(newClan);
-            fetchClanData();
-            setShowCreateClanModal(false);
-            showToast("Đã khởi tạo Gia phả dòng họ mới thành công!");
-          }}
-        />
-      )}
-
-      {/* 3. Invite Modal (Admin Only) */}
-      {isAdmin && (
-        <InviteModal
-          isOpen={showInviteModal}
-          onClose={() => setShowInviteModal(false)}
-          clanName={clan?.name || "Gia phả dòng họ"}
-          adminEmail={currentUser.email}
-        />
-      )}
-
-      {/* 4. Member Detail Drawer */}
-      <MemberDetailDrawer
-        member={selectedMember}
-        onClose={() => setSelectedMember(null)}
-        isAdmin={isAdmin}
-        onEdit={(m) => {
-          setEditingMember(m);
-          setQuickActionContext(null);
-          setSelectedMember(null);
-          setShowMemberFormModal(true);
-        }}
-        onQuickAdd={(type, targetMember) => {
-          setEditingMember(null);
-          setQuickActionContext({ type, targetMember });
-          setSelectedMember(null);
-          setShowMemberFormModal(true);
-        }}
-        onDelete={(id, name) => {
-          handleDeleteMember(id, name);
-        }}
-        onKinshipSearch={(memberId) => {
-          setKinshipPreselectedA(memberId);
-          setShowKinshipModal(true);
-        }}
-        onProposeChange={(m) => {
-          setProposingMember(m);
-          setProposeRequesterName("");
-          setProposeRequesterEmail("");
-          setProposeReason("");
-          setProposeEvidence("");
-          setProposeData(JSON.stringify(m, null, 2));
-          setShowProposeModal(true);
-        }}
-        onSelectMember={(m) => {
-          setSelectedMember(m);
-          setFocusedMemberId(m.id);
-        }}
-      />
-
-      {/* 5. Member Add/Edit Form Modal */}
-      <MemberFormModal
-        isOpen={showMemberFormModal}
-        onClose={() => {
-          setShowMemberFormModal(false);
-          setEditingMember(null);
-          setQuickActionContext(null);
-        }}
-        onSuccess={(msg, savedMember) => {
-          setShowMemberFormModal(false);
-          setEditingMember(null);
-          setQuickActionContext(null);
-          if (savedMember) {
-            // Lưu vĩnh viễn vào localStorage để không bao giờ bị load lại từ đầu
-            recordLocalMemberSaved(savedMember);
-            setLatestSavedMember(savedMember);
-            setAllMembers((prev) => {
-              const idx = prev.findIndex((m) => m.id === savedMember.id);
-              if (idx >= 0) {
-                const next = [...prev];
-                next[idx] = { ...next[idx], ...savedMember };
-                return next;
-              }
-              return [savedMember, ...prev];
-            });
-          }
-          refreshAllData();
-          showToast(msg || "Đã lưu và cập nhật hồ sơ thành viên thành công!");
-        }}
-        editingMember={editingMember}
-        quickActionContext={quickActionContext}
-        branches={branches}
-        allMembers={allMembers}
-        isAdmin={isAdmin}
-      />
-
-      {/* 6. Kinship Calculator Modal */}
+      {/* 4. Kinship Calculator Modal */}
       <KinshipCalculatorModal
         isOpen={showKinshipModal}
-        onClose={() => {
-          setShowKinshipModal(false);
-          setKinshipPreselectedA(undefined);
-          setKinshipPreselectedB(undefined);
-        }}
-        preselectedAId={kinshipPreselectedA}
-        preselectedBId={kinshipPreselectedB}
+        onClose={() => setShowKinshipModal(false)}
+        preselectedAId={selectedMember?.id}
       />
 
-      {/* 7. History Modal */}
-      <HistoryModal
-        isOpen={showHistoryModal}
-        onClose={() => setShowHistoryModal(false)}
-        clan={clan}
-      />
-
-      {/* 8. Anniversaries & Events Modal */}
+      {/* 5. Anniversaries Modal */}
       <AnniversariesModal
         isOpen={showAnniversariesModal}
         onClose={() => setShowAnniversariesModal(false)}
         isAdmin={isAdmin}
-        onOpenAddMember={() => {
-          setEditingMember(null);
-          setShowMemberFormModal(true);
-        }}
+        onOpenAddMember={handleOpenAddMember}
       />
-
-      {/* 7. Guest Propose Change Modal */}
-      {showProposeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-[#C59B27]/40 overflow-hidden">
-            <div className="px-6 py-4 bg-gradient-to-r from-[#8B1E1E] to-[#681313] text-white flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <FileCheck2 className="w-5 h-5 text-amber-300" />
-                <h2 className="text-base font-bold font-serif text-amber-200">
-                  Đề Xuất Chỉnh Sửa Thông Tin Gia Phả
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowProposeModal(false)}
-                className="text-white/80 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleProposeSubmit} className="p-6 space-y-4">
-              {proposeMsg && (
-                <div className="p-2.5 bg-emerald-50 text-emerald-800 text-xs rounded-lg border border-emerald-200 flex items-center space-x-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>{proposeMsg}</span>
-                </div>
-              )}
-
-              <p className="text-xs text-stone-600">
-                Bạn đang đề xuất cập nhật cho thành viên:{" "}
-                <strong className="text-[#8B1E1E]">{proposingMember?.fullName}</strong>. Mọi đề xuất cần cung cấp nguồn tư liệu minh chứng để Ban Quản Trị thẩm định.
-              </p>
-
-              <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Họ và tên người gửi đề xuất *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ví dụ: Phan Quốc Bảo"
-                  value={proposeRequesterName}
-                  onChange={(e) => setProposeRequesterName(e.target.value)}
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-xs focus:ring-1 focus:ring-[#8B1E1E] focus:outline-hidden"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Email / Số điện thoại liên hệ
-                </label>
-                <input
-                  type="text"
-                  placeholder="email@example.com hoặc SĐT"
-                  value={proposeRequesterEmail}
-                  onChange={(e) => setProposeRequesterEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-xs focus:ring-1 focus:ring-[#8B1E1E] focus:outline-hidden"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Lý do đề xuất thay đổi *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Bổ sung ngày mất âm lịch, sửa tên chữ húy..."
-                  value={proposeReason}
-                  onChange={(e) => setProposeReason(e.target.value)}
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-xs focus:ring-1 focus:ring-[#8B1E1E] focus:outline-hidden"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Nguồn tư liệu minh chứng *
-                </label>
-                <textarea
-                  rows={2}
-                  required
-                  placeholder="Theo bản gia phả chép tay của dòng họ..."
-                  value={proposeEvidence}
-                  onChange={(e) => setProposeEvidence(e.target.value)}
-                  className="w-full px-3 py-2 border border-stone-300 rounded-lg text-xs focus:ring-1 focus:ring-[#8B1E1E] focus:outline-hidden"
-                ></textarea>
-              </div>
-
-              <div className="pt-2 flex justify-end space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setShowProposeModal(false)}
-                  className="px-4 py-2 border border-stone-300 rounded-lg text-xs font-medium text-stone-600 hover:bg-stone-50"
-                >
-                  Hủy bỏ
-                </button>
-                <button
-                  type="submit"
-                  disabled={proposeSubmitting}
-                  className="px-4 py-2 bg-[#8B1E1E] text-white rounded-lg text-xs font-bold hover:bg-[#721515] transition-all disabled:opacity-50"
-                >
-                  {proposeSubmitting ? "Đang gửi..." : "Gửi đề xuất xác minh"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <FamilyStoreProvider>
+      <HomePageContent />
+    </FamilyStoreProvider>
   );
 }

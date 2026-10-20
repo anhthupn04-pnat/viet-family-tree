@@ -1,42 +1,34 @@
 import { Node, Edge, MarkerType } from "@xyflow/react";
-import { MemberNode } from "@/components/FamilyTreeCanvas";
+import { Member } from "@/types/family";
 
-const NODE_WIDTH = 220;
-const NODE_HEIGHT = 145;
-const SPOUSE_GAP = 28;
-const SIBLING_GAP = 48;
-const LEVEL_HEIGHT = 250;
-const BASE_Y = 60;
-const BASE_X = 60;
+const CARD_WIDTH = 170;
+const CARD_HEIGHT = 240;
+const SPOUSE_GAP = 24;
+const SIBLING_GAP = 32;
+const LEVEL_HEIGHT = 400; // Khoảng cách giữa các đời để đường nối T-shape thoáng đẹp
+const BASE_Y = 50;
 
-interface FamilyUnit {
-  primary: MemberNode;
-  spouse?: MemberNode;
-  children: MemberNode[];
-  width: number;
-  x: number;
-  y: number;
+interface FamilyLayoutOptions {
+  onSelectMember: (m: Member) => void;
+  onQuickAddChild: (m: Member) => void;
+  onQuickAddSpouse: (m: Member) => void;
+  onEditMember: (m: Member) => void;
+  focusedMemberId?: string | null;
 }
 
 export function computeFamilyTreeLayout(
-  members: MemberNode[],
-  options: {
-    isAdmin: boolean;
-    focusedMemberId?: string | null;
-    onSelectMember: (m: MemberNode) => void;
-    onQuickAdd: (type: "child" | "spouse" | "parent", targetMember: MemberNode) => void;
-    onEditMember: (m: MemberNode) => void;
-  }
+  members: Member[],
+  options: FamilyLayoutOptions
 ): { nodes: Node[]; edges: Edge[] } {
   if (!members || members.length === 0) {
     return { nodes: [], edges: [] };
   }
 
-  const memberMap = new Map<string, MemberNode>();
+  const memberMap = new Map<string, Member>();
   members.forEach((m) => memberMap.set(m.id, m));
 
-  // Determine generations present in data
-  const genMap = new Map<number, MemberNode[]>();
+  // Phân chia theo đời
+  const genMap = new Map<number, Member[]>();
   members.forEach((m) => {
     const gen = m.generation || 1;
     if (!genMap.has(gen)) {
@@ -48,139 +40,121 @@ export function computeFamilyTreeLayout(
   const sortedGens = Array.from(genMap.keys()).sort((a, b) => a - b);
   const nodePositions = new Map<string, { x: number; y: number }>();
 
-  // Process generation by generation
-  let globalMaxX = BASE_X;
+  // Xử lý vị trí các thế hệ
+  // Đời 1: Cặp khởi tổ hoặc các cụ đời 1
+  const gen1Members = genMap.get(1) || [];
+  const handledGen1 = new Set<string>();
 
-  sortedGens.forEach((gen, genIndex) => {
-    const genMembers = genMap.get(gen)!;
-    const handledInGen = new Set<string>();
-    const units: FamilyUnit[] = [];
+  // Tìm các con của Đời 1 để tính độ rộng căn giữa
+  const gen2Members = (genMap.get(2) || []).sort(
+    (a, b) => (a.orderInFamily || 99) - (b.orderInFamily || 99)
+  );
 
-    // Group couples and singles
-    genMembers.forEach((m) => {
-      if (handledInGen.has(m.id)) return;
+  // Tính chiều rộng tổng của các con Đời 2
+  const gen2TotalWidth =
+    gen2Members.length > 0
+      ? gen2Members.length * CARD_WIDTH + (gen2Members.length - 1) * SIBLING_GAP
+      : CARD_WIDTH;
 
-      let spouse: MemberNode | undefined = undefined;
-      if (m.spouseId && memberMap.has(m.spouseId)) {
-        const sp = memberMap.get(m.spouseId)!;
-        if (sp.generation === gen && !handledInGen.has(sp.id)) {
-          spouse = sp;
-          handledInGen.add(sp.id);
-        }
-      }
+  const startGen2X = 80;
+  const gen2CenterX = startGen2X + gen2TotalWidth / 2;
 
-      // If m is female and spouse is male, swap so male is primary (standard left-to-right lineage)
-      let primary = m;
-      if (spouse && m.gender === "FEMALE" && spouse.gender === "MALE") {
-        primary = spouse;
-        spouse = m;
-      }
-      handledInGen.add(m.id);
+  // Căn Đời 1 ngay giữa phía trên các con Đời 2
+  gen1Members.forEach((m) => {
+    if (handledGen1.has(m.id)) return;
 
-      const unitWidth = spouse ? 2 * NODE_WIDTH + SPOUSE_GAP : NODE_WIDTH;
-      units.push({
-        primary,
-        spouse,
-        children: [],
-        width: unitWidth,
-        x: 0,
-        y: BASE_Y + (gen - 1) * LEVEL_HEIGHT,
-      });
-    });
+    if (m.spouseId && memberMap.has(m.spouseId)) {
+      const spouse = memberMap.get(m.spouseId)!;
+      handledGen1.add(m.id);
+      handledGen1.add(spouse.id);
 
-    // Position units on this generation
-    let currentX = BASE_X;
+      const husband = m.gender === "male" ? m : spouse;
+      const wife = m.gender === "male" ? spouse : m;
 
-    if (genIndex === 0) {
-      // First generation: place centered or sequentially
-      units.forEach((unit) => {
-        unit.x = currentX;
-        currentX += unit.width + SIBLING_GAP * 2;
+      const coupleWidth = 2 * CARD_WIDTH + SPOUSE_GAP;
+      const coupleStartX = gen2CenterX - coupleWidth / 2;
+
+      nodePositions.set(husband.id, { x: coupleStartX, y: BASE_Y });
+      nodePositions.set(wife.id, {
+        x: coupleStartX + CARD_WIDTH + SPOUSE_GAP,
+        y: BASE_Y,
       });
     } else {
-      // Subsequent generations: group by parent if possible
-      units.forEach((unit) => {
-        const fatherId = unit.primary.fatherId || (unit.spouse ? unit.spouse.fatherId : null);
-        const motherId = unit.primary.motherId || (unit.spouse ? unit.spouse.motherId : null);
-
-        let parentCenterX: number | null = null;
-        if (fatherId && nodePositions.has(fatherId)) {
-          const fPos = nodePositions.get(fatherId)!;
-          if (motherId && nodePositions.has(motherId)) {
-            const mPos = nodePositions.get(motherId)!;
-            parentCenterX = (fPos.x + mPos.x + NODE_WIDTH) / 2;
-          } else {
-            parentCenterX = fPos.x + NODE_WIDTH / 2;
-          }
-        } else if (motherId && nodePositions.has(motherId)) {
-          const mPos = nodePositions.get(motherId)!;
-          parentCenterX = mPos.x + NODE_WIDTH / 2;
-        }
-
-        if (parentCenterX !== null) {
-          // Desired ideal position centered below parent
-          const idealX = parentCenterX - unit.width / 2;
-          unit.x = Math.max(currentX, idealX);
-        } else {
-          unit.x = currentX;
-        }
-
-        currentX = unit.x + unit.width + SIBLING_GAP;
+      handledGen1.add(m.id);
+      nodePositions.set(m.id, {
+        x: gen2CenterX - CARD_WIDTH / 2,
+        y: BASE_Y,
       });
     }
+  });
 
-    if (currentX > globalMaxX) {
-      globalMaxX = currentX;
-    }
-
-    // Save positions of each member in the unit
-    units.forEach((unit) => {
-      nodePositions.set(unit.primary.id, { x: unit.x, y: unit.y });
-      if (unit.spouse) {
-        nodePositions.set(unit.spouse.id, {
-          x: unit.x + NODE_WIDTH + SPOUSE_GAP,
-          y: unit.y,
-        });
-      }
+  // Đặt vị trí Đời 2 (9 người con thẳng hàng từ trái sang phải)
+  gen2Members.forEach((child, index) => {
+    const childX = startGen2X + index * (CARD_WIDTH + SIBLING_GAP);
+    nodePositions.set(child.id, {
+      x: childX,
+      y: BASE_Y + LEVEL_HEIGHT,
     });
   });
 
-  // Build React Flow nodes
+  // Xử lý các thế hệ tiếp theo nếu có (Đời 3, Đời 4...)
+  sortedGens.forEach((gen) => {
+    if (gen <= 2) return;
+    const genList = (genMap.get(gen) || []).sort(
+      (a, b) => (a.orderInFamily || 99) - (b.orderInFamily || 99)
+    );
+
+    let currX = startGen2X;
+    genList.forEach((m) => {
+      // Cố gắng căn dưới cha/mẹ nếu có
+      const parentId = m.fatherId || m.motherId;
+      if (parentId && nodePositions.has(parentId)) {
+        const pPos = nodePositions.get(parentId)!;
+        currX = Math.max(currX, pPos.x);
+      }
+      nodePositions.set(m.id, {
+        x: currX,
+        y: BASE_Y + (gen - 1) * LEVEL_HEIGHT,
+      });
+      currX += CARD_WIDTH + SIBLING_GAP;
+    });
+  });
+
+  // Tạo Nodes cho React Flow
   const nodes: Node[] = members.map((m) => {
-    const pos = nodePositions.get(m.id) || { x: BASE_X, y: BASE_Y };
+    const pos = nodePositions.get(m.id) || { x: startGen2X, y: BASE_Y };
     return {
       id: m.id,
       type: "familyNode",
       position: pos,
       data: {
         member: m,
-        isAdmin: options.isAdmin,
-        isFocused: options.focusedMemberId === m.id,
         onSelectMember: options.onSelectMember,
-        onQuickAdd: options.onQuickAdd,
+        onQuickAddChild: options.onQuickAddChild,
+        onQuickAddSpouse: options.onQuickAddSpouse,
         onEditMember: options.onEditMember,
+        isFocused: options.focusedMemberId === m.id,
       },
     };
   });
 
-  // Build React Flow edges
+  // Tạo Edges (Đường nối vuông góc Step Lines)
   const edges: Edge[] = [];
   const handledSpouseEdges = new Set<string>();
 
   members.forEach((m) => {
-    // 1. Spouse horizontal dashed edge
+    // 1. Đường nối ngang hôn phối vợ chồng
     if (m.spouseId && memberMap.has(m.spouseId)) {
-      const spouse = memberMap.get(m.spouseId)!;
-      const pairKey = [m.id, spouse.id].sort().join("---");
+      const pairKey = [m.id, m.spouseId].sort().join("---");
       if (!handledSpouseEdges.has(pairKey)) {
         handledSpouseEdges.add(pairKey);
-
+        const spouse = memberMap.get(m.spouseId)!;
         const mPos = nodePositions.get(m.id);
         const sPos = nodePositions.get(spouse.id);
 
         if (mPos && sPos) {
-          // Husband to wife or left-to-right
-          const [leftNode, rightNode] = mPos.x <= sPos.x ? [m, spouse] : [spouse, m];
+          const [leftNode, rightNode] =
+            mPos.x <= sPos.x ? [m, spouse] : [spouse, m];
 
           edges.push({
             id: `edge-spouse-${leftNode.id}-${rightNode.id}`,
@@ -205,24 +179,23 @@ export function computeFamilyTreeLayout(
       }
     }
 
-    // 2. Parent-to-Child descent edge
-    // Connect from Father if available, or Mother if father is not recorded
+    // 2. Đường kẻ vuông góc chữ T (Orthogonal Step Lines) từ cha/mẹ xuống con cái
     const parentId = m.fatherId || m.motherId;
     if (parentId && memberMap.has(parentId)) {
       edges.push({
         id: `edge-lineage-${parentId}-${m.id}`,
         source: parentId,
         target: m.id,
-        type: "smoothstep",
+        type: "step", // Đường vuông góc chuẩn mực dạng chữ T
         style: {
-          stroke: "#8B1D1D",
+          stroke: "#334155", // Màu xám đen thanh lịch, rõ ràng
           strokeWidth: 2,
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          color: "#8B1D1D",
-          width: 12,
-          height: 12,
+          color: "#334155",
+          width: 10,
+          height: 10,
         },
       });
     }
