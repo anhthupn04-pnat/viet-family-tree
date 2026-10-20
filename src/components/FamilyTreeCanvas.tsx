@@ -22,6 +22,7 @@ import {
   Users,
 } from "lucide-react";
 import FamilyNode from "./tree/FamilyNode";
+import OrthogonalBloodlineEdge from "./tree/OrthogonalBloodlineEdge";
 import { computeFamilyTreeLayout } from "./tree/treeLayout";
 import { Member } from "@/types/family";
 import { useFamilyStore } from "@/lib/family-store";
@@ -37,6 +38,10 @@ interface FamilyTreeCanvasProps {
 
 const nodeTypes = {
   familyNode: FamilyNode,
+};
+
+const edgeTypes = {
+  orthogonalBloodline: OrthogonalBloodlineEdge,
 };
 
 function FamilyTreeCanvasInner({
@@ -224,25 +229,26 @@ function FamilyTreeCanvasInner({
       </div>
 
       {/* Main Canvas Area */}
-      <div className="flex-1 w-full h-full relative">
+      <div className="flex-1 w-full h-full relative bg-lotus-watermark">
         <ReactFlow
           nodes={nodes}
           edges={edges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           fitView
           minZoom={0.2}
           maxZoom={2.0}
           defaultViewport={{ x: 50, y: 50, zoom: 0.85 }}
-          className="bg-slate-50"
+          className="bg-transparent"
         >
-          {/* Subtle modern dot background */}
+          {/* Subtle dots blending with Dong Son watermark */}
           <Background
             variant={BackgroundVariant.Dots}
             gap={24}
-            size={1.2}
-            color="#CBD5E1"
+            size={0.8}
+            color="#C7BBA8"
           />
 
           {/* Controls */}
@@ -275,8 +281,8 @@ function FamilyTreeCanvasInner({
             <span>Nữ / Phối ngẫu (Viền hồng)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-4 h-0.5 bg-slate-700" />
-            <span>Đường chữ T vuông góc (Huyết thống)</span>
+            <span className="w-4 h-0.5 bg-[#8B1D1D]" />
+            <span>Đường chữ T đâm từ cha mẹ (Huyết thống)</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-4 border-t-2 border-dashed border-rose-500" />

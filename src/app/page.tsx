@@ -209,6 +209,12 @@ function HomePageContent() {
         editingMember={editingMember}
         quickContext={quickContext}
         onShowToast={showToast}
+        onSuccess={(savedId) => {
+          setActiveTab("tree");
+          if (savedId) {
+            setFocusedMemberId(savedId);
+          }
+        }}
       />
 
       {/* 3. Login Modal */}

@@ -30,6 +30,7 @@ interface MemberFormModalProps {
   editingMember?: Member | null;
   quickContext?: QuickContext | null;
   onShowToast?: (msg: string) => void;
+  onSuccess?: (savedMemberId?: string) => void;
 }
 
 export default function MemberFormModal({
@@ -38,6 +39,7 @@ export default function MemberFormModal({
   editingMember,
   quickContext,
   onShowToast,
+  onSuccess,
 }: MemberFormModalProps) {
   const {
     members,
@@ -169,9 +171,11 @@ export default function MemberFormModal({
       if (editingMember) {
         updateMemberDirect(editingMember.id, memberPayload);
         onShowToast?.(`Đã cập nhật trực tiếp thành viên "${fullName.trim()}"!`);
+        onSuccess?.(editingMember.id);
       } else {
-        addMemberDirect(memberPayload);
+        const created = addMemberDirect(memberPayload);
         onShowToast?.(`Đã thêm trực tiếp thành viên "${fullName.trim()}" vào phả hệ!`);
+        onSuccess?.(created?.id);
       }
     } else {
       // Guest Proposal Mode
@@ -201,6 +205,7 @@ export default function MemberFormModal({
       onShowToast?.(
         "Yêu cầu của bạn đã được gửi thành công và đang đợi Ban trị sự (Admin) kiểm duyệt trước khi áp dụng lên cây phả hệ."
       );
+      onSuccess?.(editingMember ? editingMember.id : undefined);
     }
 
     onClose();
