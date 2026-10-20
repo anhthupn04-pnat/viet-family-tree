@@ -17,7 +17,13 @@ interface TreeUnit {
   generation: number;
   children: TreeUnit[];
   width: number;
+  stemOffset: number;
+  dropOffset: number;
   subtreeWidth: number;
+  relativeX: number;
+  childOffsets: number[];
+  relativeDropX: number;
+  relativeStemX: number;
   x: number;
   y: number;
 }
@@ -80,6 +86,9 @@ export function computeFamilyTreeLayout(
     handled.add(m.id);
 
     const unitWidth = secondary ? 2 * NODE_WIDTH + SPOUSE_GAP : NODE_WIDTH;
+    const stemOffset = secondary ? NODE_WIDTH + SPOUSE_GAP / 2 : NODE_WIDTH / 2;
+    const dropOffset = NODE_WIDTH / 2;
+
     const unit: TreeUnit = {
       id: "unit-" + primary.id,
       primary,
@@ -87,7 +96,13 @@ export function computeFamilyTreeLayout(
       generation: primary.generation || 1,
       children: [],
       width: unitWidth,
+      stemOffset,
+      dropOffset,
       subtreeWidth: unitWidth,
+      relativeX: 0,
+      childOffsets: [],
+      relativeDropX: dropOffset,
+      relativeStemX: stemOffset,
       x: 0,
       y: 0,
     };
@@ -128,11 +143,16 @@ export function computeFamilyTreeLayout(
     return (a.primary.orderInFamily || 99) - (b.primary.orderInFamily || 99);
   });
 
-  // 3. Tính toán độ rộng cây con (Subtree Width) từ dưới lên (Bottom-up)
-  function computeSubtreeWidth(unit: TreeUnit): number {
+  // 3. Tính toán bố cục cây con (Hierarchical Recursive Subtree Layout) từ dưới lên (Bottom-up)
+  // Đảm bảo: Điểm đâm nhánh từ cha mẹ (stemX) luôn ở CHÍNH GIỮA các điểm neo huyết thống của con (dropX)
+  function layoutSubtree(unit: TreeUnit): number {
     if (unit.children.length === 0) {
       unit.subtreeWidth = unit.width;
-      return unit.width;
+      unit.relativeX = 0;
+      unit.childOffsets = [];
+      unit.relativeDropX = unit.dropOffset;
+      unit.relativeStemX = unit.stemOffset;
+      return unit.subtreeWidth;
     }
 
     // Sắp xếp các con của đơn vị này theo thứ tự anh em (orderInFamily)
@@ -142,27 +162,64 @@ export function computeFamilyTreeLayout(
       return orderA - orderB;
     });
 
-    let totalChildWidth = 0;
-    unit.children.forEach((c, idx) => {
-      const w = computeSubtreeWidth(c);
-      totalChildWidth += w;
-      if (idx > 0) totalChildWidth += SIBLING_GAP;
+    // 3.1 Tính toán bố cục các cây con của đàn con
+    const childOffsets: number[] = [];
+    let currentChildX = 0;
+
+    unit.children.forEach((child, idx) => {
+      layoutSubtree(child);
+      if (idx > 0) currentChildX += SIBLING_GAP;
+      childOffsets.push(currentChildX);
+      currentChildX += child.subtreeWidth;
     });
 
-    unit.subtreeWidth = Math.max(unit.width, totalChildWidth);
+    const totalChildrenWidth = currentChildX;
+
+    // 3.2 Xác định điểm neo huyết thống (drop point) của người con đầu và người con cuối
+    const firstChild = unit.children[0];
+    const lastChild = unit.children[unit.children.length - 1];
+
+    const firstDropX = childOffsets[0] + firstChild.relativeDropX;
+    const lastDropX =
+      childOffsets[childOffsets.length - 1] + lastChild.relativeDropX;
+
+    // Điểm đâm nhánh lý tưởng của cha mẹ: CHÍNH GIỮA 2 ĐIỂM CON BIÊN
+    // Giúp đường kẻ ngang chữ T luôn cân xứng tuyệt đối 2 bên (stemX - firstDropX === lastDropX - stemX)
+    const idealStemX = (firstDropX + lastDropX) / 2;
+
+    // Tọa độ X tương đối của cha mẹ để stemX trùng khít với idealStemX
+    let parentRelativeX = idealStemX - unit.stemOffset;
+
+    // 3.3 Kiểm tra vùng bao bao phủ cả cha mẹ lẫn các con
+    const minX = Math.min(0, parentRelativeX);
+    const maxX = Math.max(totalChildrenWidth, parentRelativeX + unit.width);
+
+    // Nếu cha mẹ mở rộng về phía bên trái (minX < 0), tịnh tiến toàn bộ cây sang phải
+    const shift = -minX;
+    parentRelativeX += shift;
+    for (let i = 0; i < childOffsets.length; i++) {
+      childOffsets[i] += shift;
+    }
+
+    unit.subtreeWidth = maxX + shift;
+    unit.relativeX = parentRelativeX;
+    unit.childOffsets = childOffsets;
+    unit.relativeDropX = unit.relativeX + unit.dropOffset;
+    unit.relativeStemX = unit.relativeX + unit.stemOffset;
+
     return unit.subtreeWidth;
   }
 
-  // 4. Bố trí vị trí tọa độ (Top-down) đảm bảo:
-  // - Vợ và Chồng đứng song song liền kề nhau trên cùng trục Y
-  // - Cặp cha mẹ luôn được căn chính giữa phía trên đàn con của chính họ
-  // - Các nhánh con cháu độc lập không bị chèn hay đè chéo đường nối
+  // 4. Gán tọa độ toàn cục (Top-down Coordinates Assignment)
   const nodePositions = new Map<string, { x: number; y: number }>();
 
-  function positionUnitTree(unit: TreeUnit, leftX: number, currentY: number) {
-    unit.y = currentY;
-    // Căn giữa cặp cha mẹ trong không gian subtree của họ
-    unit.x = leftX + (unit.subtreeWidth - unit.width) / 2;
+  function assignCoordinates(
+    unit: TreeUnit,
+    subtreeOriginX: number,
+    levelY: number
+  ) {
+    unit.x = subtreeOriginX + unit.relativeX;
+    unit.y = levelY;
 
     nodePositions.set(unit.primary.id, { x: unit.x, y: unit.y });
     if (unit.spouse) {
@@ -172,28 +229,18 @@ export function computeFamilyTreeLayout(
       });
     }
 
-    if (unit.children.length > 0) {
-      let totalChildrenWidth = 0;
-      unit.children.forEach((c, idx) => {
-        totalChildrenWidth += c.subtreeWidth;
-        if (idx > 0) totalChildrenWidth += SIBLING_GAP;
-      });
-
-      // Căn giữa tập hợp các con ngay bên dưới cha mẹ
-      let childLeftX = leftX + (unit.subtreeWidth - totalChildrenWidth) / 2;
-      const nextY = currentY + LEVEL_HEIGHT;
-
-      unit.children.forEach((child) => {
-        positionUnitTree(child, childLeftX, nextY);
-        childLeftX += child.subtreeWidth + SIBLING_GAP;
-      });
-    }
+    const nextLevelY = levelY + LEVEL_HEIGHT;
+    unit.children.forEach((child, idx) => {
+      const childSubtreeOriginX = subtreeOriginX + unit.childOffsets[idx];
+      assignCoordinates(child, childSubtreeOriginX, nextLevelY);
+    });
   }
 
   let currentRootX = BASE_X;
   rootUnits.forEach((root) => {
-    computeSubtreeWidth(root);
-    positionUnitTree(root, currentRootX, BASE_Y);
+    layoutSubtree(root);
+    const rootY = BASE_Y + Math.max(0, root.generation - 1) * LEVEL_HEIGHT;
+    assignCoordinates(root, currentRootX, rootY);
     currentRootX += root.subtreeWidth + FAMILY_GAP;
   });
 
@@ -260,9 +307,7 @@ export function computeFamilyTreeLayout(
     // Tọa độ xuất phát:
     // Nếu có cả cha và mẹ: đâm từ chính giữa khoảng hở giữa 2 thẻ
     // Nếu chỉ có đơn thân: đâm từ chính giữa đáy thẻ
-    const startX = unit.spouse
-      ? unit.x + NODE_WIDTH + SPOUSE_GAP / 2
-      : unit.x + NODE_WIDTH / 2;
+    const startX = unit.x + unit.stemOffset;
     const startY = unit.y + NODE_HEIGHT;
 
     // Nhánh ngang (branch level Y) nằm ở vị trí 50% khoảng cách giữa 2 đời
