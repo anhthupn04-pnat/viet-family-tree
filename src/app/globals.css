@@ -4,65 +4,81 @@
 
 @layer base {
   :root {
-    --background: #fdfcf9;
-    --foreground: #231f1e;
-    --primary: #8b1e1e;
-    --primary-hover: #721515;
-    --gold: #c59b27;
+    --bg-cream: #FDFBF7;
+    --jade-dark: #1E5F52;
+    --jade-base: #2B7A6A;
+    --jade-light: #3D9986;
+    --imperial-red: #C62828;
+    --imperial-red-dark: #9E1B1B;
+    --gold-trim: #E0A926;
+    --gold-light: #FADB7F;
+    --lotus-pink: #F06292;
+    --lotus-pink-light: #FCE4EC;
+    --sage-line: #94A3B8;
   }
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: #FDFBF7;
+  color: #1E293B;
+  font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   overflow-x: hidden;
 }
 
-/* Họa tiết hoa văn truyền thống Đông Sơn / Trống đồng */
-.bg-drum-pattern {
-  background-color: #8b1e1e;
-  background-image: radial-gradient(#c59b27 0.75px, transparent 0.75px), radial-gradient(#c59b27 0.75px, #8b1e1e 0.75px);
-  background-size: 30px 30px;
-  background-position: 0 0, 15px 15px;
+/* Hoa văn hoa sen & sóng nước truyền thống Việt Nam dạng chìm (subtle watermark) */
+.bg-lotus-watermark {
+  background-color: #FDFBF7;
+  background-image: 
+    radial-gradient(#E8DEC7 0.8px, transparent 0.8px),
+    url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%232B7A6A' fill-opacity='0.035' fill-rule='evenodd'%3E%3Cpath d='M60 20c-8 12-16 26-16 38 0 12 7 22 16 22s16-10 16-22c0-12-8-26-16-38zm-12 18c-10 8-20 20-20 30 0 10 6 18 14 18 6 0 12-6 15-14-3-12-6-24-9-34zm24 0c3 10 6 22 9 34 3 8 9 14 15 14 8 0 14-8 14-18 0-10-10-22-20-30zM30 84c6-4 14-4 20 0 6 4 14 4 20 0 6-4 14-4 20 0v2c-6 4-14 4-20 0-6-4-14-4-20 0-6 4-14 4-20 0v-2z'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 24px 24px, 120px 120px;
 }
 
-.bg-parchment-pattern {
-  background-color: #faf7ee;
-  background-image: radial-gradient(#e5dfcf 0.75px, transparent 0.75px);
-  background-size: 20px 20px;
+/* Scroll chiếu thư cổ Imperial Scroll */
+.imperial-scroll {
+  background: linear-gradient(135deg, #C62828 0%, #B71C1C 50%, #8E1515 100%);
+  border: 2px solid #E0A926;
+  box-shadow: 0 10px 25px -5px rgba(198, 40, 40, 0.3), 0 0 0 1px rgba(224, 169, 38, 0.4);
 }
 
-/* Custom scrollbar */
+/* Thẻ bài ngọc bích Jade Card */
+.jade-card {
+  background: linear-gradient(145deg, #1E5F52 0%, #2B7A6A 100%);
+  color: #FFFFFF;
+  border: 1px solid rgba(224, 169, 38, 0.3);
+  box-shadow: 0 8px 20px -4px rgba(30, 95, 82, 0.25);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.jade-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px -4px rgba(30, 95, 82, 0.35);
+  border-color: #E0A926;
+}
+
+/* Đường nối cây gia phả trực giao (Orthogonal Tree Connectors) */
+.tree-connector-v {
+  width: 2px;
+  background-color: #8CA397;
+}
+
+.tree-connector-h {
+  height: 2px;
+  background-color: #8CA397;
+}
+
+/* Custom scrollbar thanh lịch */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1ebd9;
+  background: #FDFBF7;
 }
 ::-webkit-scrollbar-thumb {
-  background: #c59b27;
+  background: #2B7A6A;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #8b1e1e;
-}
-
-/* Hiệu ứng khung viền truyền thống */
-.border-traditional {
-  border: 1px solid #e2d7ba;
-  box-shadow: 0 4px 14px 0 rgba(139, 30, 30, 0.05);
-}
-
-.card-gold-glow:hover {
-  box-shadow: 0 8px 24px -4px rgba(197, 155, 39, 0.25);
-  border-color: #c59b27;
-}
-
-/* Grid canvas dots cho cây gia phả */
-.canvas-grid {
-  background-color: #fcfbfa;
-  background-image: radial-gradient(#d5ccb8 1px, transparent 1px);
-  background-size: 24px 24px;
+  background: #C62828;
 }

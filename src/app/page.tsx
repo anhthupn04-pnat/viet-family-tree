@@ -15,6 +15,7 @@ import MemberFormModal from "@/components/MemberFormModal";
 import LoginModal from "@/components/LoginModal";
 import CreateClanModal from "@/components/CreateClanModal";
 import KinshipCalculatorModal from "@/components/KinshipCalculatorModal";
+import LotusFooter from "@/components/LotusFooter";
 import {
   ShieldCheck,
   Eye,
@@ -26,6 +27,7 @@ import {
   CheckCircle2,
   X,
   FileCheck2,
+  Flower2,
 } from "lucide-react";
 
 export interface CurrentUser {
@@ -216,28 +218,28 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col font-sans">
-      {/* Dynamic Role Switcher Notice Bar */}
+      {/* Dynamic Role Switcher Notice Bar with Lotus Accent */}
       <div
-        className={`px-4 py-2 border-b text-xs flex flex-wrap items-center justify-between gap-3 shadow-xs transition-colors ${
+        className={`px-4 py-2 border-b text-xs flex flex-wrap items-center justify-between gap-3 shadow-2xs transition-colors ${
           isAdmin
-            ? "bg-amber-100/90 border-amber-300 text-amber-900"
-            : "bg-[#FAF7EE] border-[#E5DAC6] text-stone-700"
+            ? "bg-[#FEF3C7]/90 border-[#E0A926]/40 text-[#78350F]"
+            : "bg-[#FDFBF7] border-[#E8DEC7] text-stone-700"
         }`}
       >
         <div className="max-w-7xl mx-auto w-full flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center space-x-2">
             <span
               className={`w-2.5 h-2.5 rounded-full ${
-                isAdmin ? "bg-emerald-600 animate-ping" : "bg-stone-400"
+                isAdmin ? "bg-[#1E5F52] animate-ping" : "bg-[#F06292]"
               }`}
             ></span>
-            <span className="font-semibold">
+            <span className="font-semibold text-stone-900">
               {isAdmin ? "Đang ở chế độ Quản Trị Viên (Admin):" : "Đang ở chế độ Khách Thăm Quan:"}
             </span>
             <span className="font-medium text-stone-600">
               {isAdmin
-                ? "Có toàn quyền tạo chi nhánh (1-4 chi mẫu khởi tạo), thêm/sửa/xóa thành viên và phê duyệt gia phả."
-                : "Xem thông tin gia phả, sơ đồ trực quan, tra cứu xưng hô và gửi đề xuất cập nhật."}
+                ? "Toàn quyền tạo chi nhánh (1-4 chi mẫu ban đầu), thêm/sửa/xóa thành viên và thẩm định gia phả."
+                : "Xem thông tin gia phả, sơ đồ trực quan, tra cứu xưng hô và gửi đề xuất cập nhật kèm minh chứng."}
             </span>
           </div>
 
@@ -251,7 +253,7 @@ export default function HomePage() {
               className={`px-3 py-1 rounded-full text-xs font-bold transition-all shadow-xs flex items-center space-x-1.5 ${
                 isAdmin
                   ? "bg-white text-stone-700 hover:bg-stone-100 border border-amber-300"
-                  : "bg-[#8B1E1E] text-white hover:bg-[#721515]"
+                  : "bg-[#1E5F52] text-white hover:bg-[#16483E] border border-[#E0A926]/40"
               }`}
             >
               {isAdmin ? (
@@ -261,7 +263,7 @@ export default function HomePage() {
                 </>
               ) : (
                 <>
-                  <ShieldCheck className="w-3.5 h-3.5 text-amber-300" />
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#FADB7F]" />
                   <span>Chuyển sang Giao diện Admin</span>
                 </>
               )}
@@ -437,32 +439,8 @@ export default function HomePage() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="mt-12 bg-white border-t border-[#E8DEC7] py-8 text-stone-600 text-xs">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-lg bg-[#8B1E1E] text-amber-300 font-serif font-black flex items-center justify-center text-sm">
-              GP
-            </div>
-            <div>
-              <p className="font-bold text-stone-800 font-serif">
-                Gia Phả Việt — VietFamilyTree
-              </p>
-              <p className="text-stone-500 text-[11px]">
-                Nền tảng số hóa di sản, gia phả và kết nối dòng họ Việt Nam
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-4 text-stone-500">
-            <span>Tài khoản Quản trị: <strong>anhthuphan0102@gmail.com</strong></span>
-            <span>•</span>
-            <span>Khởi tạo: <strong>4 chi họ mẫu ban đầu</strong></span>
-            <span>•</span>
-            <span className="text-emerald-700 font-medium">Bảo vệ chu trình huyết thống</span>
-          </div>
-        </div>
-      </footer>
+      {/* Footer: Lively Blooming Pink Lotus & Layered Green Lotus Leaves over Rippling Waves */}
+      <LotusFooter />
 
       {/* MODALS & DRAWERS */}
       {/* 1. Login Modal */}
