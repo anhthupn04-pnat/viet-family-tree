@@ -695,17 +695,26 @@ export default function FamilyTreeCanvas({
                                       <Compass className="w-3.5 h-3.5" />
                                     </button>
 
-                                    {/* Sub-badge: C (Còn sống), M (Đã mất) as in giao diện.jpg */}
-                                    <span
-                                      className={`text-[9px] font-black px-1.5 py-0.2 rounded-full border ${
-                                        member.isAlive
-                                          ? "bg-emerald-400/20 text-emerald-200 border-emerald-400/40"
-                                          : "bg-black/30 text-stone-300 border-stone-500/40"
-                                      }`}
-                                      title={member.isAlive ? "Còn sống" : "Đã mất"}
-                                    >
-                                      {member.isAlive ? "C" : "M"}
-                                    </span>
+                                    {/* Sub-badge: LS (Liệt sĩ), C (Còn sống), M (Đã mất) as in giao diện.jpg */}
+                                    {member.biography?.toLowerCase().includes("liệt sĩ") || member.courtesyName?.toLowerCase().includes("liệt sĩ") ? (
+                                      <span
+                                        className="text-[9px] font-black px-1.5 py-0.2 rounded-full border bg-red-500/30 text-amber-200 border-red-400"
+                                        title="Liệt sĩ vẻ vang"
+                                      >
+                                        LS
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className={`text-[9px] font-black px-1.5 py-0.2 rounded-full border ${
+                                          member.isAlive
+                                            ? "bg-emerald-400/20 text-emerald-200 border-emerald-400/40"
+                                            : "bg-black/30 text-stone-300 border-stone-500/40"
+                                        }`}
+                                        title={member.isAlive ? "Còn sống" : "Đã mất"}
+                                      >
+                                        {member.isAlive ? "C" : "M"}
+                                      </span>
+                                    )}
                                   </div>
 
                                   {/* Full Name in crisp white text */}
@@ -750,7 +759,7 @@ export default function FamilyTreeCanvas({
                   <p className="font-bold text-center text-[#1E5F52] font-serif border-b border-stone-200 pb-1">
                     * CHÚ DẪN
                   </p>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1 text-[10px]">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pt-1 text-[10px]">
                     <div className="flex items-center space-x-1.5">
                       <span className="w-4 h-4 rounded-full bg-emerald-700 text-white font-bold flex items-center justify-center text-[9px]">
                         C
@@ -764,16 +773,22 @@ export default function FamilyTreeCanvas({
                       <span>Đã mất</span>
                     </div>
                     <div className="flex items-center space-x-1.5">
+                      <span className="w-4 h-4 rounded-full bg-red-700 text-amber-200 font-bold flex items-center justify-center text-[8px]">
+                        LS
+                      </span>
+                      <span>Liệt sĩ</span>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
                       <span className="w-4 h-4 rounded-full bg-[#F06292] text-white font-bold flex items-center justify-center text-[9px]">
                         HP
                       </span>
                       <span>Hôn phối</span>
                     </div>
-                    <div className="flex items-center space-x-1.5">
+                    <div className="flex items-center space-x-1.5 col-span-2">
                       <span className="w-4 h-4 rounded-full bg-[#E0A926] text-[#24150B] font-bold flex items-center justify-center text-[9px]">
                         ★
                       </span>
-                      <span>Trưởng chi</span>
+                      <span>Khởi tổ / Trưởng chi</span>
                     </div>
                   </div>
                 </div>
