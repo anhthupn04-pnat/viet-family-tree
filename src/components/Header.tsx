@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Users,
   GitBranch,
@@ -12,6 +12,12 @@ import {
   Sparkles,
   UserPlus,
   Bell,
+  Search,
+  Calendar,
+  Building2,
+  X,
+  ChevronDown,
+  LogOut,
 } from "lucide-react";
 
 interface HeaderProps {
@@ -28,21 +34,24 @@ interface HeaderProps {
   onOpenCreateBranch?: () => void;
   onOpenAddMember: () => void;
   onOpenInvite?: () => void;
+  onOpenHistory?: () => void;
+  onOpenAnniversaries?: () => void;
+  onFocusMember?: (memberId: string) => void;
+  allMembers?: any[];
   pendingCount?: number;
   clanName?: string;
 }
 
-// Stylized Golden Dragon SVG motif
+// Stylized Golden Vietnamese Dragon (Rồng Hoàng Kim thời Lý - Lê)
 const GoldenDragon = ({ flip = false }: { flip?: boolean }) => (
   <svg
     viewBox="0 0 100 60"
-    className={`w-12 h-8 sm:w-16 sm:h-10 text-[#E0A926] shrink-0 drop-shadow-sm ${
+    className={`w-10 h-7 sm:w-14 sm:h-9 text-[#E0A926] shrink-0 drop-shadow-sm transition-transform ${
       flip ? "scale-x-[-1]" : ""
     }`}
     fill="currentColor"
     xmlns="http://www.w3.org/2000/svg"
   >
-    {/* Stylized Vietnamese Royal Dragon (Rồng Thời Lý/Lê) */}
     <path
       d="M10 45 C 20 40, 25 25, 38 28 C 45 30, 48 42, 60 40 C 72 38, 76 20, 85 18 C 92 16, 96 22, 94 28 C 90 38, 78 48, 65 50 C 50 52, 45 44, 35 48 C 25 52, 18 55, 10 45 Z"
       fill="currentColor"
@@ -52,21 +61,8 @@ const GoldenDragon = ({ flip = false }: { flip?: boolean }) => (
       d="M85 18 C 88 12, 95 10, 98 14 C 100 18, 96 24, 92 24 C 88 24, 84 20, 85 18 Z"
       fill="#FADB7F"
     />
-    <path
-      d="M92 16 C 98 8, 88 4, 82 8 C 78 11, 80 15, 84 14 Z"
-      fill="#E0A926"
-    />
+    <path d="M92 16 C 98 8, 88 4, 82 8 C 78 11, 80 15, 84 14 Z" fill="#E0A926" />
     <circle cx="89" cy="18" r="2" fill="#C62828" />
-    <path
-      d="M25 35 C 28 30, 34 32, 33 37 C 32 42, 27 40, 25 35 Z"
-      fill="#FADB7F"
-      opacity="0.7"
-    />
-    <path
-      d="M48 35 C 52 30, 58 32, 57 37 C 56 42, 50 40, 48 35 Z"
-      fill="#FADB7F"
-      opacity="0.7"
-    />
   </svg>
 );
 
@@ -80,12 +76,57 @@ export default function Header({
   onOpenCreateBranch,
   onOpenAddMember,
   onOpenInvite,
+  onOpenHistory,
+  onOpenAnniversaries,
+  onFocusMember,
+  allMembers = [],
   pendingCount = 0,
   clanName = "Gia phả dòng họ",
 }: HeaderProps) {
   const isAdmin = currentUser.role === "ADMIN";
 
-  // Focused Navigation: Tree view, Members list, and Admin approval dashboard
+  // Global search autocomplete state
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  // Close search dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setIsSearchOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const searchResults = React.useMemo(() => {
+    if (!searchTerm.trim()) return [];
+    const q = searchTerm.toLowerCase().trim();
+    return allMembers
+      .filter((m) => {
+        const nameMatch = m.fullName.toLowerCase().includes(q);
+        const courtesyMatch = m.courtesyName && m.courtesyName.toLowerCase().includes(q);
+        const codeMatch = m.memberCode && m.memberCode.toLowerCase().includes(q);
+        const birthMatch = m.birthSolar && m.birthSolar.includes(q);
+        const branchMatch = m.branchName && m.branchName.toLowerCase().includes(q);
+        return nameMatch || courtesyMatch || codeMatch || birthMatch || branchMatch;
+      })
+      .slice(0, 6);
+  }, [searchTerm, allMembers]);
+
+  const handleSelectSearchResult = (member: any) => {
+    setIsSearchOpen(false);
+    setSearchTerm("");
+    if (activeTab !== "tree") {
+      setActiveTab("tree");
+    }
+    if (onFocusMember) {
+      onFocusMember(member.id);
+    }
+  };
+
   const navItems = [
     { id: "tree", label: "Cây Gia Phả", icon: GitBranch },
     { id: "members", label: "Danh Sách Thành Viên", icon: Users },
@@ -102,20 +143,14 @@ export default function Header({
   return (
     <header className="sticky top-0 z-40 bg-[#FDFBF7]/95 backdrop-blur-md border-b border-[#E8DEC7] shadow-sm">
       {/* 1. TOP SCROLL BANNER: Imperial Red (#C62828) & Gold Trim (#E0A926) flanked by Dual Golden Dragons */}
-      <div className="relative bg-gradient-to-r from-[#8E1515] via-[#C62828] to-[#8E1515] text-white border-b-2 border-[#E0A926] shadow-md px-3 py-2 overflow-hidden">
-        {/* Subtle decorative scroll edge rings */}
-        <div className="absolute left-0 top-0 bottom-0 w-3 bg-[#E0A926] opacity-40"></div>
-        <div className="absolute right-0 top-0 bottom-0 w-3 bg-[#E0A926] opacity-40"></div>
-
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 relative z-10">
+      <div className="relative bg-gradient-to-r from-[#8E1515] via-[#C62828] to-[#8E1515] text-white border-b-2 border-[#E0A926] shadow-md px-3 py-1.5 overflow-hidden">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2.5 relative z-10">
           {/* Main Title Scroll flanked by Dual Dragons */}
-          <div className="flex items-center space-x-2 sm:space-x-3">
+          <div className="flex items-center space-x-2">
             <GoldenDragon flip={false} />
-
-            {/* Scroll text container */}
             <div className="bg-black/25 px-3 py-1 rounded-xl border border-[#E0A926]/40 backdrop-blur-xs flex items-center space-x-2">
               <span className="w-2 h-2 rounded-full bg-[#E0A926] animate-pulse"></span>
-              <span className="font-bold tracking-wide text-[#FADB7F] font-serif text-xs sm:text-sm">
+              <span className="font-bold tracking-wider text-[#FADB7F] font-serif text-xs sm:text-sm uppercase">
                 Gia phả dòng họ
               </span>
               <span className="hidden md:inline text-amber-200/50">|</span>
@@ -123,66 +158,89 @@ export default function Header({
                 “Tổ Tiên Công Đức Thiên Niên Thịnh — Tử Hiếu Tôn Hiền Vạn Đại Vinh”
               </span>
             </div>
-
             <GoldenDragon flip={true} />
           </div>
 
-          {/* Quick Role Switcher, Pending Bell & Identity */}
-          <div className="flex items-center space-x-2 sm:space-x-3">
-            {/* Notification Bell with Badge for Admin */}
+          {/* Quick Shortcuts: Lịch giỗ, Lịch sử từ đường, Role Switcher */}
+          <div className="flex items-center space-x-2 sm:space-x-2.5">
+            {/* Lối tắt 1: Lịch giỗ & Sự kiện tháng này */}
+            {onOpenAnniversaries && (
+              <button
+                type="button"
+                onClick={onOpenAnniversaries}
+                className="flex items-center space-x-1.5 bg-[#5A0D0D] hover:bg-[#6e1212] border border-[#E0A926]/50 text-amber-100 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all shadow-xs"
+                title="Xem các ngày giỗ kỵ nhật & sự kiện dòng họ"
+              >
+                <Calendar className="w-3.5 h-3.5 text-[#E0A926]" />
+                <span className="hidden sm:inline">Lịch giỗ họ</span>
+              </button>
+            )}
+
+            {/* Lối tắt 2: Lịch sử từ đường */}
+            {onOpenHistory && (
+              <button
+                type="button"
+                onClick={onOpenHistory}
+                className="flex items-center space-x-1.5 bg-[#5A0D0D] hover:bg-[#6e1212] border border-[#E0A926]/50 text-amber-100 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all shadow-xs"
+                title="Xem gốc tích, câu đối và nhà thờ họ"
+              >
+                <Building2 className="w-3.5 h-3.5 text-[#E0A926]" />
+                <span className="hidden sm:inline">Lịch sử từ đường</span>
+              </button>
+            )}
+
+            {/* Lối tắt 3: Kiểm duyệt (Admin Badge) */}
             {isAdmin && (
               <button
                 type="button"
                 onClick={() => setActiveTab("admin")}
-                className="relative p-1.5 rounded-full bg-[#5A0D0D] border border-[#E0A926]/40 text-[#FADB7F] hover:bg-[#6e1212] transition-colors"
-                title={`Bảng kiểm duyệt: ${pendingCount} yêu cầu đang chờ`}
+                className="relative flex items-center space-x-1 bg-[#5A0D0D] hover:bg-[#6e1212] border border-[#E0A926]/50 text-amber-100 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all shadow-xs"
+                title="Bảng kiểm duyệt duyệt hồ sơ đóng góp"
               >
-                <Bell className="w-4 h-4" />
+                <ShieldCheck className="w-3.5 h-3.5 text-[#E0A926]" />
+                <span className="hidden sm:inline">Duyệt</span>
                 {pendingCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-[#E0A926] text-[#24150B] font-extrabold text-[10px] w-4 h-4 rounded-full flex items-center justify-center shadow-xs animate-bounce">
+                  <span className="bg-[#E0A926] text-[#24150B] font-extrabold text-[10px] px-1.5 rounded-full ml-0.5">
                     {pendingCount}
                   </span>
                 )}
               </button>
             )}
 
-            {/* Switch role toggle */}
+            {/* Role switch pill */}
             <div className="flex items-center bg-[#5A0D0D] rounded-full p-0.5 border border-[#E0A926]/50 shadow-inner">
               <button
                 type="button"
                 onClick={() => onSwitchRole("GUEST")}
-                className={`px-3 py-1 rounded-full text-[11px] font-semibold flex items-center space-x-1.5 transition-all ${
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold flex items-center space-x-1 transition-all ${
                   !isAdmin
-                    ? "bg-[#E0A926] text-[#24150B] font-bold shadow-md"
+                    ? "bg-[#E0A926] text-[#24150B] font-bold shadow-xs"
                     : "text-amber-200 hover:text-white"
                 }`}
-                title="Chế độ Thành viên / Khách"
               >
                 <Eye className="w-3 h-3" />
-                <span>Khách/Thành viên</span>
+                <span>Khách</span>
               </button>
-
               <button
                 type="button"
                 onClick={() => onSwitchRole("ADMIN")}
-                className={`px-3 py-1 rounded-full text-[11px] font-semibold flex items-center space-x-1.5 transition-all ${
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold flex items-center space-x-1 transition-all ${
                   isAdmin
-                    ? "bg-[#E0A926] text-[#24150B] font-bold shadow-md"
+                    ? "bg-[#E0A926] text-[#24150B] font-bold shadow-xs"
                     : "text-amber-200 hover:text-white"
                 }`}
-                title="Chế độ Tổng Quản Trị"
               >
                 <ShieldCheck className="w-3 h-3 text-[#C62828]" />
                 <span>Admin</span>
               </button>
             </div>
 
-            {/* Status indicator */}
+            {/* Login / Profile */}
             {isAdmin ? (
-              <div className="hidden sm:flex items-center space-x-1.5 bg-[#E0A926]/20 text-[#FADB7F] px-2.5 py-1 rounded-lg border border-[#E0A926]/40 text-xs">
+              <div className="flex items-center space-x-1.5 bg-[#E0A926]/20 text-[#FADB7F] px-2.5 py-1 rounded-full border border-[#E0A926]/40 text-xs">
                 <UserCheck className="w-3.5 h-3.5 text-[#E0A926]" />
-                <span className="font-mono text-[11px]">anhthuphan0102@gmail.com</span>
-                <span className="bg-[#E0A926] text-[#24150B] font-bold text-[9px] px-1 rounded ml-1">
+                <span className="font-mono text-[11px] hidden lg:inline">anhthuphan0102@gmail.com</span>
+                <span className="bg-[#E0A926] text-[#24150B] font-bold text-[9px] px-1.5 rounded">
                   ADMIN
                 </span>
               </div>
@@ -190,24 +248,23 @@ export default function Header({
               <button
                 type="button"
                 onClick={onOpenLogin}
-                className="flex items-center space-x-1 bg-[#F06292]/20 hover:bg-[#F06292]/30 text-pink-100 px-2.5 py-1 rounded-lg border border-[#F06292]/40 text-xs transition-all shadow-xs"
+                className="flex items-center space-x-1 bg-[#F06292]/20 hover:bg-[#F06292]/30 text-pink-100 px-2.5 py-1 rounded-full border border-[#F06292]/40 text-xs transition-all shadow-xs"
               >
                 <LogIn className="w-3 h-3 text-[#F06292]" />
-                <span>Đăng nhập Admin</span>
+                <span>Đăng nhập</span>
               </button>
             )}
           </div>
         </div>
       </div>
 
-      {/* 2. MAIN LOGO & ACTION BAR */}
-      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-        {/* Brand with Lotus Pink & Jade Green accents */}
+      {/* 2. MAIN LOGO, GLOBAL SEARCH & ACTION BAR */}
+      <div className="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+        {/* Brand Logo */}
         <div
           onClick={() => setActiveTab("tree")}
-          className="flex items-center space-x-3 cursor-pointer group"
+          className="flex items-center space-x-3 cursor-pointer group shrink-0"
         >
-          {/* Logo icon with Jade Green (#1E5F52) & Gold border */}
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#1E5F52] to-[#2B7A6A] border-2 border-[#E0A926] flex items-center justify-center text-[#FADB7F] font-serif font-black text-lg shadow-md group-hover:scale-105 transition-transform">
             GP
           </div>
@@ -222,52 +279,118 @@ export default function Header({
               </span>
             </div>
             <p className="text-[11px] text-stone-500 -mt-0.5">
-              VietFamilyTree — Quản Lý Phả Hệ & Trực Hệ Dòng Họ
+              Hệ Thống Quản Lý Phả Hệ & Trực Hệ Chuẩn Văn Hóa Việt Nam
             </p>
           </div>
         </div>
 
-        {/* Action Buttons with RBAC */}
-        <div className="flex items-center space-x-2">
-          {/* Admin Exclusive: Invite Link Button */}
+        {/* Global Search with Autocomplete Dropdown */}
+        <div ref={searchRef} className="relative flex-1 max-w-md min-w-[240px]">
+          <div className="relative">
+            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setIsSearchOpen(true);
+              }}
+              onFocus={() => setIsSearchOpen(true)}
+              placeholder="Tìm kiếm theo tên, năm sinh, chi họ..."
+              className="w-full pl-9 pr-8 py-1.5 text-xs bg-stone-50 hover:bg-white focus:bg-white border border-stone-300 rounded-full focus:outline-none focus:ring-2 focus:ring-[#1E5F52]/30 focus:border-[#1E5F52] transition-all shadow-2xs"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                className="absolute right-2.5 top-2 text-stone-400 hover:text-stone-600"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Autocomplete Dropdown */}
+          {isSearchOpen && searchResults.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1.5 bg-white rounded-xl shadow-xl border border-[#E0A926]/40 overflow-hidden z-50 animate-fade-in divide-y divide-stone-100">
+              <div className="px-3 py-1.5 bg-amber-50/70 border-b border-amber-200/50 text-[10px] font-bold text-amber-900 uppercase tracking-wider flex items-center justify-between">
+                <span>Kết quả tìm kiếm ({searchResults.length})</span>
+                <span className="text-stone-400 font-normal">Click để định vị trên cây</span>
+              </div>
+              {searchResults.map((m) => (
+                <div
+                  key={m.id}
+                  onClick={() => handleSelectSearchResult(m)}
+                  className="px-3 py-2 hover:bg-emerald-50/60 cursor-pointer flex items-center justify-between transition-colors text-xs"
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 text-white shadow-2xs ${
+                        m.gender === "MALE" ? "bg-[#1E5F52]" : "bg-[#9C274E]"
+                      }`}
+                    >
+                      {m.fullName.charAt(0)}
+                    </div>
+                    <div>
+                      <h5 className="font-bold text-stone-900 font-serif leading-tight">
+                        {m.fullName}
+                      </h5>
+                      <p className="text-[10px] text-stone-500">
+                        {m.birthOrder ? `${m.birthOrder} • ` : ""}
+                        Đời thứ {m.generation}
+                        {m.birthSolar ? ` • ${m.birthSolar.slice(0, 4)}` : ""}
+                        {m.isAlive === false ? " (Đã mất)" : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">
+                    {m.branchName || "Chi họ"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons: Add Member & Create Clan */}
+        <div className="flex items-center space-x-2 shrink-0">
+          {/* Admin Exclusive: Invite Button */}
           {isAdmin && onOpenInvite && (
             <button
               type="button"
               onClick={onOpenInvite}
               className="inline-flex items-center space-x-1.5 bg-[#FAF7EE] hover:bg-[#F5EEDC] text-[#1E5F52] border border-[#E0A926] px-3 py-1.5 rounded-xl text-xs font-semibold shadow-xs transition-all"
-              title="Tạo liên kết bảo mật mời thành viên"
             >
               <UserPlus className="w-3.5 h-3.5 text-[#E0A926]" />
               <span className="hidden sm:inline">Mời thành viên</span>
             </button>
           )}
 
-          {/* Add Member Button: Available to all, but status is handled by role */}
+          {/* Add member button */}
           <button
             type="button"
             onClick={onOpenAddMember}
             className="inline-flex items-center space-x-1.5 bg-[#1E5F52] hover:bg-[#16483E] text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-md transition-all border border-[#E0A926]/40"
           >
             <PlusCircle className="w-3.5 h-3.5 text-[#FADB7F]" />
-            <span>{isAdmin ? "Thêm thành viên" : "Đóng góp thành viên"}</span>
+            <span>{isAdmin ? "Thêm người" : "Đóng góp thành viên"}</span>
           </button>
 
-          {/* Admin Exclusive: "Tạo Gia Phả Mới" - ONLY Admin can see & use this */}
+          {/* Admin Exclusive: Create New Clan */}
           {isAdmin && (
             <button
               type="button"
               onClick={onOpenCreateClan}
-              className="inline-flex items-center space-x-1.5 bg-[#C62828] hover:bg-[#A91B1B] text-white font-bold px-3.5 py-1.5 rounded-xl text-xs shadow-md transition-all border border-[#E0A926]/50"
-              title="Khởi tạo một gia phả dòng họ mới"
+              className="inline-flex items-center space-x-1.5 bg-[#C62828] hover:bg-[#A91B1B] text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow-md transition-all border border-[#E0A926]/50"
             >
               <Sparkles className="w-3.5 h-3.5 text-[#FADB7F]" />
-              <span>Tạo Gia Phả Mới</span>
+              <span className="hidden sm:inline">Tạo Gia Phả Mới</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* 3. NAVIGATION TABS (Focused Minimalist Scope) */}
+      {/* 3. NAVIGATION TABS */}
       <div className="border-t border-[#E8DEC7] bg-[#FDFBF7] px-4 overflow-x-auto no-scrollbar">
         <div className="max-w-7xl mx-auto flex items-center space-x-1">
           {navItems.map((item) => {
@@ -278,7 +401,7 @@ export default function Header({
                 key={item.id}
                 type="button"
                 onClick={() => setActiveTab(item.id)}
-                className={`flex items-center space-x-1.5 py-2.5 px-4 text-xs sm:text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
+                className={`flex items-center space-x-1.5 py-2 px-4 text-xs sm:text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
                   isActive
                     ? "border-[#1E5F52] text-[#1E5F52] font-bold bg-[#E6F4F1] rounded-t-lg shadow-2xs"
                     : "border-transparent text-stone-600 hover:text-[#1E5F52] hover:bg-stone-50"

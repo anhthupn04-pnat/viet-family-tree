@@ -11,6 +11,8 @@ import LoginModal from "@/components/LoginModal";
 import CreateClanModal from "@/components/CreateClanModal";
 import InviteModal from "@/components/InviteModal";
 import KinshipCalculatorModal from "@/components/KinshipCalculatorModal";
+import HistoryModal from "@/components/HistoryModal";
+import AnniversariesModal from "@/components/AnniversariesModal";
 import LotusFooter from "@/components/LotusFooter";
 import {
   ShieldCheck,
@@ -70,8 +72,11 @@ export default function HomePage() {
   const [editingMember, setEditingMember] = useState<any | null>(null);
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
   const [showKinshipModal, setShowKinshipModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showAnniversariesModal, setShowAnniversariesModal] = useState(false);
   const [kinshipPreselectedA, setKinshipPreselectedA] = useState<string | undefined>();
   const [kinshipPreselectedB, setKinshipPreselectedB] = useState<string | undefined>();
+  const [focusedMemberId, setFocusedMemberId] = useState<string | null>(null);
 
   // Toast notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -346,6 +351,13 @@ export default function HomePage() {
           setShowMemberFormModal(true);
         }}
         onOpenInvite={() => setShowInviteModal(true)}
+        onOpenHistory={() => setShowHistoryModal(true)}
+        onOpenAnniversaries={() => setShowAnniversariesModal(true)}
+        onFocusMember={(memberId) => {
+          setFocusedMemberId(memberId);
+          setActiveTab("tree");
+        }}
+        allMembers={allMembers}
         pendingCount={pendingCount}
         clanName={clan?.name || "Gia phả dòng họ"}
       />
@@ -374,6 +386,7 @@ export default function HomePage() {
                 setShowKinshipModal(true);
               }}
               onOpenCreateClan={() => setShowCreateClanModal(true)}
+              focusedMemberId={focusedMemberId}
               isAdmin={isAdmin}
               clanName={clan?.name || "Gia phả dòng họ"}
             />
@@ -481,6 +494,10 @@ export default function HomePage() {
           setProposeData(JSON.stringify(m, null, 2));
           setShowProposeModal(true);
         }}
+        onSelectMember={(m) => {
+          setSelectedMember(m);
+          setFocusedMemberId(m.id);
+        }}
       />
 
       {/* 5. Member Add/Edit Form Modal */}
@@ -521,6 +538,24 @@ export default function HomePage() {
         }}
         preselectedAId={kinshipPreselectedA}
         preselectedBId={kinshipPreselectedB}
+      />
+
+      {/* 7. History Modal */}
+      <HistoryModal
+        isOpen={showHistoryModal}
+        onClose={() => setShowHistoryModal(false)}
+        clan={clan}
+      />
+
+      {/* 8. Anniversaries & Events Modal */}
+      <AnniversariesModal
+        isOpen={showAnniversariesModal}
+        onClose={() => setShowAnniversariesModal(false)}
+        isAdmin={isAdmin}
+        onOpenAddMember={() => {
+          setEditingMember(null);
+          setShowMemberFormModal(true);
+        }}
       />
 
       {/* 7. Guest Propose Change Modal */}

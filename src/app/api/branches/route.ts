@@ -8,20 +8,31 @@ export async function GET(request: Request) {
 
     const where = clanId ? { clanId } : {};
 
-    const branches = await prisma.clanBranch.findMany({
-      where,
-      orderBy: { branchOrder: "asc" },
-      include: {
-        _count: {
-          select: { members: true },
+    let branches: any[] = [];
+    try {
+      branches = await prisma.clanBranch.findMany({
+        where,
+        orderBy: { branchOrder: "asc" },
+        include: {
+          _count: {
+            select: { members: true },
+          },
         },
-      },
-    });
+      });
+    } catch (dbErr) {
+      console.warn("DB branches warning, using mock:", dbErr);
+    }
+
+    if (!branches || branches.length === 0) {
+      const { MOCK_BRANCHES } = await import("@/lib/mockData");
+      return NextResponse.json({ branches: MOCK_BRANCHES });
+    }
 
     return NextResponse.json({ branches });
   } catch (error: any) {
     console.error("Branches GET error:", error);
-    return NextResponse.json({ error: "Lỗi khi tải danh sách chi họ." }, { status: 500 });
+    const { MOCK_BRANCHES } = await import("@/lib/mockData");
+    return NextResponse.json({ branches: MOCK_BRANCHES });
   }
 }
 

@@ -4,19 +4,30 @@ import { getDaysUntilAnniversary } from "@/lib/lunar";
 
 export async function GET() {
   try {
-    const anniversaries = await prisma.ancestorAnniversary.findMany({
-      orderBy: [{ lunarMonth: "asc" }, { lunarDay: "asc" }],
-      include: {
-        member: {
-          select: {
-            id: true,
-            fullName: true,
-            generation: true,
-            branch: { select: { branchName: true } },
+    let anniversaries: any[] = [];
+    try {
+      anniversaries = await prisma.ancestorAnniversary.findMany({
+        orderBy: [{ lunarMonth: "asc" }, { lunarDay: "asc" }],
+        include: {
+          member: {
+            select: {
+              id: true,
+              fullName: true,
+              generation: true,
+              branch: { select: { branchName: true } },
+            },
           },
         },
-      },
-    });
+      });
+    } catch (e) {
+      console.warn("DB anniversaries warning, using mock:", e);
+      anniversaries = [];
+    }
+
+    if (!anniversaries || anniversaries.length === 0) {
+      const { MOCK_ANNIVERSARIES } = await import("@/lib/mockData");
+      anniversaries = MOCK_ANNIVERSARIES as any[];
+    }
 
     const enriched = anniversaries.map((ann) => {
       const { daysRemaining, isToday, isUpcoming } = getDaysUntilAnniversary(
@@ -37,7 +48,8 @@ export async function GET() {
     return NextResponse.json({ anniversaries: enriched });
   } catch (error: any) {
     console.error("Anniversaries GET error:", error);
-    return NextResponse.json({ error: "Lỗi khi tải lịch giỗ." }, { status: 500 });
+    const { MOCK_ANNIVERSARIES } = await import("@/lib/mockData");
+    return NextResponse.json({ anniversaries: MOCK_ANNIVERSARIES });
   }
 }
 

@@ -81,6 +81,8 @@ model MemberProfile {
   hometown         String?        // Quê quán
   currentResidence String?        // Nơi cư trú
   avatarUrl        String?
+  birthOrder       String?        // Thứ bậc: Khởi tổ, Con trưởng, Con thứ 2, Con gái thứ 3...
+  isMartyr         Boolean        @default(false) // Liệt sĩ / Có công với Tổ quốc
   biography        String?        // Tiểu sử, học vị, công danh
   phone            String?        // Số điện thoại (chỉ hiện với thành viên có quyền)
   isVerified       Boolean        @default(true)

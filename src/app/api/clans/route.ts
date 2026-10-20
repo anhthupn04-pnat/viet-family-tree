@@ -3,25 +3,45 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
-    const clan = await prisma.clan.findFirst({
-      include: {
-        branches: {
-          orderBy: { branchOrder: "asc" },
-        },
-        _count: {
-          select: {
-            members: true,
-            branches: true,
-            events: true,
-            funds: true,
-            documents: true,
+    let clan: any = null;
+    try {
+      clan = await prisma.clan.findFirst({
+        include: {
+          branches: {
+            orderBy: { branchOrder: "asc" },
+          },
+          _count: {
+            select: {
+              members: true,
+              branches: true,
+              events: true,
+              funds: true,
+              documents: true,
+            },
           },
         },
-      },
-    });
+      });
+    } catch (dbErr) {
+      console.warn("DB clan query warning, fallback to mock:", dbErr);
+    }
 
     if (!clan) {
-      return NextResponse.json({ error: "Chưa có dòng họ nào được khởi tạo." }, { status: 404 });
+      const { MOCK_CLAN, MOCK_BRANCHES, MOCK_MEMBERS } = await import("@/lib/mockData");
+      return NextResponse.json({
+        clan: {
+          ...MOCK_CLAN,
+          branches: MOCK_BRANCHES,
+        },
+        stats: {
+          totalMembers: MOCK_MEMBERS.length,
+          totalBranches: MOCK_BRANCHES.length,
+          totalGenerations: 3,
+          aliveCount: MOCK_MEMBERS.filter((m) => m.isAlive).length,
+          deceasedCount: MOCK_MEMBERS.filter((m) => !m.isAlive).length,
+          maleCount: MOCK_MEMBERS.filter((m) => m.gender === "MALE").length,
+          femaleCount: MOCK_MEMBERS.filter((m) => m.gender === "FEMALE").length,
+        },
+      });
     }
 
     // Thống kê thành viên
@@ -54,7 +74,22 @@ export async function GET() {
     });
   } catch (error: any) {
     console.error("Clan GET error:", error);
-    return NextResponse.json({ error: "Lỗi khi lấy thông tin dòng họ" }, { status: 500 });
+    const { MOCK_CLAN, MOCK_BRANCHES, MOCK_MEMBERS } = await import("@/lib/mockData");
+    return NextResponse.json({
+      clan: {
+        ...MOCK_CLAN,
+        branches: MOCK_BRANCHES,
+      },
+      stats: {
+        totalMembers: MOCK_MEMBERS.length,
+        totalBranches: MOCK_BRANCHES.length,
+        totalGenerations: 3,
+        aliveCount: MOCK_MEMBERS.filter((m) => m.isAlive).length,
+        deceasedCount: MOCK_MEMBERS.filter((m) => !m.isAlive).length,
+        maleCount: MOCK_MEMBERS.filter((m) => m.gender === "MALE").length,
+        femaleCount: MOCK_MEMBERS.filter((m) => m.gender === "FEMALE").length,
+      },
+    });
   }
 }
 

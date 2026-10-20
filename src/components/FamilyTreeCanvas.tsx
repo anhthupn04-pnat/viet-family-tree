@@ -5,12 +5,10 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize,
+  Minimize,
   Lock,
   Unlock,
-  Search,
   Filter,
-  ChevronLeft,
-  ChevronRight,
   PlusCircle,
   Users,
   Sparkles,
@@ -19,16 +17,37 @@ import {
   Compass,
   Heart,
   RefreshCw,
+  Download,
+  FileSpreadsheet,
+  FileCode,
+  Printer,
+  ChevronDown,
+  LayoutGrid,
+  GitGraph,
+  PieChart,
+  List,
+  Star,
+  Layers,
+  ArrowRight,
+  Search,
 } from "lucide-react";
+import {
+  exportFamilyToExcel,
+  exportFamilyToGedcom,
+  printOrExportA0,
+} from "@/lib/exportUtils";
+import { MOCK_MEMBERS } from "@/lib/mockData";
 
-interface MemberNode {
+export interface MemberNode {
   id: string;
   memberCode: string;
   fullName: string;
   courtesyName?: string | null;
   gender: string;
   generation: number;
+  birthOrder?: string | null;
   isAlive: boolean;
+  isMartyr?: boolean;
   birthSolar?: string | null;
   deathSolar?: string | null;
   birthLunar?: string | null;
@@ -47,21 +66,33 @@ interface MemberNode {
   phone?: string | null;
 }
 
+interface TreeUnit {
+  id: string;
+  primary: MemberNode;
+  spouse?: MemberNode;
+  children: TreeUnit[];
+  x: number;
+  y: number;
+  width: number;
+  subtreeWidth: number;
+}
+
 interface FamilyTreeCanvasProps {
   onSelectMember: (member: MemberNode) => void;
   onOpenAddMember?: () => void;
   onOpenKinshipForMember?: (memberId: string) => void;
   onOpenKinshipForTwo?: (memberAId: string, memberBId: string) => void;
   onOpenCreateClan?: () => void;
+  focusedMemberId?: string | null;
   isAdmin: boolean;
   clanName?: string;
 }
 
-// Stylized Golden Royal Dragon (Rồng Vàng Hoàng Kim thời Lý - Trần chầu phụng)
+// Stylized Golden Royal Dragon (Rồng Vàng Hoàng Kim chầu phụng)
 const GoldenDragon = ({ flip = false }: { flip?: boolean }) => (
   <svg
     viewBox="0 0 160 100"
-    className={`w-20 h-14 sm:w-28 sm:h-18 text-[#E0A926] shrink-0 drop-shadow-md transition-transform ${
+    className={`w-16 h-11 sm:w-24 sm:h-16 text-[#E0A926] shrink-0 drop-shadow-md transition-transform ${
       flip ? "scale-x-[-1]" : ""
     }`}
     fill="currentColor"
@@ -86,18 +117,6 @@ const GoldenDragon = ({ flip = false }: { flip?: boolean }) => (
       fill="#E0A926"
     />
     <circle cx="152" cy="27" r="2.5" fill="#C62828" />
-    <path
-      d="M40 70 L 35 85 M 43 72 L 42 88 M 48 72 L 52 86"
-      stroke="#FADB7F"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-    />
-    <path
-      d="M95 72 L 92 88 M 100 74 L 102 90 M 106 72 L 112 87"
-      stroke="#FADB7F"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-    />
   </svg>
 );
 
@@ -106,41 +125,30 @@ const VerticalScroll = ({ text, position }: { text: string; position: "left" | "
   const characters = text.split("");
   return (
     <div
-      className={`hidden lg:flex flex-col items-center py-2 px-1 rounded-sm shadow-md border border-[#E0A926] bg-[#C62828] text-white z-10 w-8 shrink-0 ${
-        position === "left" ? "mr-3" : "ml-3"
+      className={`hidden lg:flex flex-col items-center py-2 px-1 rounded-sm shadow-md border border-[#E0A926] bg-[#C62828] text-white z-10 w-7 shrink-0 ${
+        position === "left" ? "mr-2" : "ml-2"
       }`}
     >
-      <div className="w-10 h-2 bg-gradient-to-r from-[#D97706] via-[#FADB7F] to-[#D97706] rounded-sm -mt-3 border border-[#92400E] shadow-xs"></div>
-      <div className="flex flex-col items-center justify-around flex-1 py-1.5 space-y-1 font-serif text-[10px] font-bold text-[#FADB7F] tracking-widest select-none">
+      <div className="w-9 h-1.5 bg-gradient-to-r from-[#D97706] via-[#FADB7F] to-[#D97706] rounded-sm -mt-2.5 border border-[#92400E] shadow-2xs"></div>
+      <div className="flex flex-col items-center justify-around flex-1 py-1 space-y-1 font-serif text-[9px] font-bold text-[#FADB7F] tracking-widest select-none">
         {characters.map((char, index) => (
           <span key={index} className="leading-tight block">
             {char}
           </span>
         ))}
       </div>
-      <div className="w-10 h-2 bg-gradient-to-r from-[#D97706] via-[#FADB7F] to-[#D97706] rounded-sm -mb-3 border border-[#92400E] shadow-xs"></div>
+      <div className="w-9 h-1.5 bg-gradient-to-r from-[#D97706] via-[#FADB7F] to-[#D97706] rounded-sm -mb-2.5 border border-[#92400E] shadow-2xs"></div>
     </div>
   );
 };
 
 // Layout geometry constants
-const CARD_WIDTH = 186;
-const CARD_HEIGHT = 124;
-const SPOUSE_GAP = 10;
-const SIBLING_GAP = 32;
+const CARD_WIDTH = 192;
+const CARD_HEIGHT = 128;
+const SPOUSE_GAP = 12;
+const SIBLING_GAP = 36;
 const ROW_GAP = 96;
-const ROW_START_Y = 160;
-
-interface TreeUnit {
-  id: string;
-  primary: MemberNode;
-  spouse?: MemberNode;
-  children: TreeUnit[];
-  x: number;
-  y: number;
-  width: number;
-  subtreeWidth: number;
-}
+const ROW_START_Y = 175;
 
 export default function FamilyTreeCanvas({
   onSelectMember,
@@ -148,36 +156,60 @@ export default function FamilyTreeCanvas({
   onOpenKinshipForMember,
   onOpenKinshipForTwo,
   onOpenCreateClan,
+  focusedMemberId,
   isAdmin,
   clanName = "Gia phả dòng họ",
 }: FamilyTreeCanvasProps) {
   const [members, setMembers] = useState<MemberNode[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
 
-  // Kinship 2-person comparison mode
-  const [kinshipCompareMode, setKinshipCompareMode] = useState<boolean>(false);
+  // Filters state
+  const [selectedBranch, setSelectedBranch] = useState<string>("ALL");
+  const [selectedGeneration, setSelectedGeneration] = useState<string>("ALL");
+
+  // View switch mode: "top-down" | "left-right" | "fan" | "table"
+  const [viewMode, setViewMode] = useState<"top-down" | "left-right" | "fan" | "table">("top-down");
+
+  // Canvas pan & zoom state
+  const [scale, setScale] = useState(0.85);
+  const [pan, setPan] = useState({ x: 60, y: 30 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [isLocked, setIsLocked] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Export dropdown state
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+
+  // Legend collapsed state
+  const [showLegend, setShowLegend] = useState(true);
+
+  // Highlighting & Kinship state
+  const [highlightedMemberId, setHighlightedMemberId] = useState<string | null>(null);
+  const [kinshipCompareMode, setKinshipCompareMode] = useState(false);
   const [kinshipNodeA, setKinshipNodeA] = useState<MemberNode | null>(null);
   const [kinshipNodeB, setKinshipNodeB] = useState<MemberNode | null>(null);
 
-  // Filters
-  const [selectedBranch, setSelectedBranch] = useState<string>("ALL");
-  const [searchTerm, setSearchTerm] = useState<string>("");
-
-  // Canvas zoom & pan state
-  const [scale, setScale] = useState<number>(0.85);
-  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 40, y: 30 });
-  const [isLocked, setIsLocked] = useState<boolean>(false);
-  const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-
-  // Sidebar toggle
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
-  const [highlightedMemberId, setHighlightedMemberId] = useState<string | null>(null);
-
+  const canvasRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Fetch tree data
+  // Roman numeral generation symbols
+  const romanGenerations = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+
+  // Close export dropdown when clicking outside
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, []);
+
+  // Fetch tree and branches data
   const loadTree = async () => {
     try {
       setLoading(true);
@@ -190,14 +222,18 @@ export default function FamilyTreeCanvas({
       const dataTree = await resTree.json();
       const dataBranches = await resBranches.json();
 
-      if (dataTree.members) {
+      if (dataTree.members && dataTree.members.length > 0) {
         setMembers(dataTree.members);
+      } else {
+        setMembers(MOCK_MEMBERS as any[]);
       }
+
       if (dataBranches.branches) {
         setBranches(dataBranches.branches);
       }
     } catch (e) {
-      console.error(e);
+      console.warn("Tree load error, using mockData fallback:", e);
+      setMembers(MOCK_MEMBERS as any[]);
     } finally {
       setLoading(false);
     }
@@ -207,12 +243,35 @@ export default function FamilyTreeCanvas({
     loadTree();
   }, [selectedBranch]);
 
+  // Focus on member when requested from Header search
+  useEffect(() => {
+    if (!focusedMemberId || members.length === 0) return;
+    const target = members.find((m) => m.id === focusedMemberId);
+    if (target) {
+      setHighlightedMemberId(target.id);
+      onSelectMember(target);
+      // Pan to center of canvas
+      setPan({ x: 80, y: 40 });
+    }
+  }, [focusedMemberId, members]);
+
   // Zoom controls
   const handleZoomIn = () => setScale((prev) => Math.min(prev + 0.15, 1.8));
   const handleZoomOut = () => setScale((prev) => Math.max(prev - 0.15, 0.4));
-  const handleReset = () => {
+  const handleResetFit = () => {
     setScale(0.85);
-    setPan({ x: 40, y: 30 });
+    setPan({ x: 60, y: 30 });
+  };
+
+  const handleToggleFullscreen = () => {
+    if (!containerRef.current) return;
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().catch(console.error);
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen().catch(console.error);
+      setIsFullscreen(false);
+    }
   };
 
   // Mouse drag for canvas pan
@@ -232,26 +291,12 @@ export default function FamilyTreeCanvas({
 
   const handleMouseUp = () => setIsDragging(false);
 
-  // Search highlighting
-  const handleSearch = (e: React.FormEvent) => {
+  // Wheel zoom
+  const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    if (!searchTerm.trim()) {
-      setHighlightedMemberId(null);
-      return;
-    }
-    const found = members.find((m) =>
-      m.fullName.toLowerCase().includes(searchTerm.toLowerCase().trim())
-    );
-    if (found) {
-      setHighlightedMemberId(found.id);
-      onSelectMember(found);
-    } else {
-      alert(`Không tìm thấy thành viên có tên "${searchTerm}"`);
-    }
+    const delta = e.deltaY > 0 ? -0.06 : 0.06;
+    setScale((prev) => Math.min(Math.max(prev + delta, 0.35), 2.0));
   };
-
-  // Roman numeral generation symbols
-  const romanGenerations = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 
   // =========================================================================
   // TREE HIERARCHY LAYOUT ALGORITHM (ORTHOGONAL TREE)
@@ -261,16 +306,22 @@ export default function FamilyTreeCanvas({
       return { rootUnits: [], allUnitsMap: new Map(), maxGeneration: 1, connectors: [] };
     }
 
+    // Apply generation filter if specified
+    let displayMembers = members;
+    if (selectedGeneration !== "ALL") {
+      const genNum = parseInt(selectedGeneration, 10);
+      displayMembers = members.filter((m) => m.generation <= genNum);
+    }
+
     const memberMap = new Map<string, MemberNode>();
-    members.forEach((m) => memberMap.set(m.id, m));
+    displayMembers.forEach((m) => memberMap.set(m.id, m));
 
     // Identify spouses who don't have parents in tree (in-laws)
     const spouseSet = new Set<string>();
-    members.forEach((m) => {
+    displayMembers.forEach((m) => {
       if (m.spouses && m.spouses.length > 0) {
         m.spouses.forEach((sp: any) => {
           const spMember = memberMap.get(sp.id);
-          // If spouse has no father and mother, consider them a paired spouse
           if (spMember && !spMember.fatherId && !spMember.motherId && m.gender === "MALE") {
             spouseSet.add(spMember.id);
           }
@@ -278,9 +329,9 @@ export default function FamilyTreeCanvas({
       }
     });
 
-    // Build children mapping for primary members
+    // Children mapping
     const childrenMap = new Map<string, MemberNode[]>();
-    members.forEach((m) => {
+    displayMembers.forEach((m) => {
       const pId = m.fatherId || m.motherId;
       if (pId) {
         if (!childrenMap.has(pId)) childrenMap.set(pId, []);
@@ -288,9 +339,7 @@ export default function FamilyTreeCanvas({
       }
     });
 
-    // Create TreeUnits recursively
     const buildTreeUnit = (m: MemberNode): TreeUnit => {
-      // Find spouse if any
       let pairedSpouse: MemberNode | undefined;
       if (m.spouses && m.spouses.length > 0) {
         for (const sp of m.spouses) {
@@ -303,9 +352,7 @@ export default function FamilyTreeCanvas({
 
       const unitWidth = pairedSpouse ? CARD_WIDTH * 2 + SPOUSE_GAP : CARD_WIDTH;
 
-      // Children of this member
       const rawChildren = childrenMap.get(m.id) || [];
-      // Also check spouse's children if any
       if (pairedSpouse && childrenMap.has(pairedSpouse.id)) {
         const spouseChildren = childrenMap.get(pairedSpouse.id) || [];
         spouseChildren.forEach((sc) => {
@@ -315,9 +362,7 @@ export default function FamilyTreeCanvas({
         });
       }
 
-      // Filter out spouse members from children list if any
       const directChildren = rawChildren.filter((c) => !spouseSet.has(c.id));
-      // Sort children by generation, then birth solar or id
       directChildren.sort((a, b) => {
         if (a.birthSolar && b.birthSolar) return a.birthSolar.localeCompare(b.birthSolar);
         return a.id.localeCompare(b.id);
@@ -337,19 +382,18 @@ export default function FamilyTreeCanvas({
       };
     };
 
-    // Find root members (Generation 1 or no parent)
-    const roots = members.filter(
+    // Find root members (Generation 1)
+    const roots = displayMembers.filter(
       (m) => (!m.fatherId && !m.motherId && !spouseSet.has(m.id)) || m.generation === 1
     );
 
-    // If multiple roots, deduplicate if already covered
     const distinctRoots = roots.filter(
       (r, idx, arr) => arr.findIndex((x) => x.id === r.id) === idx && !spouseSet.has(r.id)
     );
 
     const rootUnitsList: TreeUnit[] = distinctRoots.map(buildTreeUnit);
 
-    // 1st pass: Calculate subtree widths bottom-up
+    // 1st pass: calculate subtree widths bottom-up
     const calcSubtreeWidth = (unit: TreeUnit): number => {
       if (unit.children.length === 0) {
         unit.subtreeWidth = unit.width + SIBLING_GAP;
@@ -361,7 +405,7 @@ export default function FamilyTreeCanvas({
     };
     rootUnitsList.forEach(calcSubtreeWidth);
 
-    // 2nd pass: Assign coordinates top-down
+    // 2nd pass: coordinates assignment
     const unitsMap = new Map<string, TreeUnit>();
     let maxGenFound = 1;
 
@@ -380,14 +424,12 @@ export default function FamilyTreeCanvas({
           childLeft += c.subtreeWidth;
         });
 
-        // Center parent over its children
         const firstChild = unit.children[0];
         const lastChild = unit.children[unit.children.length - 1];
         const firstCenter = firstChild.x + firstChild.width / 2;
         const lastCenter = lastChild.x + lastChild.width / 2;
         unit.x = (firstCenter + lastCenter) / 2 - unit.width / 2;
 
-        // If parent would be pushed before `left`, adjust
         if (unit.x < left) {
           const shift = left - unit.x;
           unit.x = left;
@@ -412,8 +454,7 @@ export default function FamilyTreeCanvas({
       startX += ru.subtreeWidth + 40;
     });
 
-    // 3rd pass: Generate orthogonal connector lines
-    // Path: Bottom of parent -> vertical drop to midY -> horizontal branch -> vertical drop to top of each child
+    // 3rd pass: Orthogonal connector lines
     interface ConnectorPath {
       parentId: string;
       childId: string;
@@ -421,17 +462,14 @@ export default function FamilyTreeCanvas({
       childUnit: TreeUnit;
       pathString: string;
       midY: number;
-      branchMinX: number;
-      branchMaxX: number;
       isHighlighted: boolean;
     }
 
     const connectorList: ConnectorPath[] = [];
 
-    // Check ancestral path if 2 nodes are selected for kinship comparison
-    const kinshipPathSet = new Set<string>(); // "parent_id->child_id"
+    // Kinship highlight path trace
+    const kinshipPathSet = new Set<string>();
     if (kinshipNodeA && kinshipNodeB) {
-      // Trace lineage of A
       const getAncestors = (mId: string): string[] => {
         const path: string[] = [mId];
         let curr = memberMap.get(mId);
@@ -447,57 +485,49 @@ export default function FamilyTreeCanvas({
       const ancestorsA = getAncestors(kinshipNodeA.id);
       const ancestorsB = getAncestors(kinshipNodeB.id);
 
-      // Find LCA
-      const lca = ancestorsA.find((id) => ancestorsB.includes(id));
-      if (lca) {
-        // Add edges from A to LCA
-        for (let i = 0; i < ancestorsA.indexOf(lca); i++) {
-          kinshipPathSet.add(`${ancestorsA[i + 1]}->${ancestorsA[i]}`);
+      let lcaId: string | null = null;
+      for (const aId of ancestorsA) {
+        if (ancestorsB.includes(aId)) {
+          lcaId = aId;
+          break;
         }
-        // Add edges from B to LCA
-        for (let i = 0; i < ancestorsB.indexOf(lca); i++) {
-          kinshipPathSet.add(`${ancestorsB[i + 1]}->${ancestorsB[i]}`);
+      }
+
+      if (lcaId) {
+        const addEdge = (p: string, c: string) => kinshipPathSet.add(`${p}->${c}`);
+        for (let i = 0; i < ancestorsA.length - 1; i++) {
+          addEdge(ancestorsA[i + 1], ancestorsA[i]);
+          if (ancestorsA[i + 1] === lcaId) break;
+        }
+        for (let i = 0; i < ancestorsB.length - 1; i++) {
+          addEdge(ancestorsB[i + 1], ancestorsB[i]);
+          if (ancestorsB[i + 1] === lcaId) break;
         }
       }
     }
 
     const collectConnectors = (unit: TreeUnit) => {
       if (unit.children.length > 0) {
-        // Parent connector starting point: bottom center of father card
-        const parentX = unit.x + CARD_WIDTH / 2;
-        const parentY = unit.y + CARD_HEIGHT;
+        const parentCenterX = unit.x + (unit.spouse ? CARD_WIDTH + SPOUSE_GAP / 2 : CARD_WIDTH / 2);
+        const parentBottomY = unit.y + CARD_HEIGHT;
+        const midY = parentBottomY + ROW_GAP / 2;
 
-        // Children top centers
-        const childPoints = unit.children.map((c) => ({
-          id: c.primary.id,
-          unit: c,
-          x: c.x + CARD_WIDTH / 2,
-          y: c.y,
-        }));
+        unit.children.forEach((child) => {
+          const childCenterX = child.x + CARD_WIDTH / 2;
+          const childTopY = child.y;
 
-        const midY = parentY + ROW_GAP / 2;
-        const allXs = [parentX, ...childPoints.map((cp) => cp.x)];
-        const branchMinX = Math.min(...allXs);
-        const branchMaxX = Math.max(...allXs);
-
-        childPoints.forEach((cp) => {
-          // Orthogonal path: Parent bottom -> Mid Y -> Horizontal -> Child Top
+          const pathString = `M ${parentCenterX} ${parentBottomY} L ${parentCenterX} ${midY} L ${childCenterX} ${midY} L ${childCenterX} ${childTopY}`;
           const isEdgeHighlighted =
-            kinshipPathSet.has(`${unit.primary.id}->${cp.id}`) ||
-            (unit.spouse && kinshipPathSet.has(`${unit.spouse.id}->${cp.id}`));
-
-          // SVG orthogonal path: M parentX,parentY V midY H cp.x V cp.y
-          const d = `M ${parentX} ${parentY} V ${midY} H ${cp.x} V ${cp.y}`;
+            kinshipPathSet.has(`${unit.primary.id}->${child.primary.id}`) ||
+            (unit.spouse && kinshipPathSet.has(`${unit.spouse.id}->${child.primary.id}`));
 
           connectorList.push({
             parentId: unit.primary.id,
-            childId: cp.id,
+            childId: child.primary.id,
             parentUnit: unit,
-            childUnit: cp.unit,
-            pathString: d,
+            childUnit: child,
+            pathString,
             midY,
-            branchMinX,
-            branchMaxX,
             isHighlighted: Boolean(isEdgeHighlighted),
           });
         });
@@ -511,12 +541,12 @@ export default function FamilyTreeCanvas({
     return {
       rootUnits: rootUnitsList,
       allUnitsMap: unitsMap,
-      maxGeneration: Math.max(maxGenFound, 5),
+      maxGeneration: Math.max(maxGenFound, 3),
       connectors: connectorList,
     };
-  }, [members, kinshipNodeA, kinshipNodeB]);
+  }, [members, selectedGeneration, kinshipNodeA, kinshipNodeB]);
 
-  // Handle clicking a node card
+  // Card click handler
   const handleCardClick = (member: MemberNode) => {
     if (kinshipCompareMode) {
       if (!kinshipNodeA) {
@@ -525,7 +555,6 @@ export default function FamilyTreeCanvas({
         setKinshipNodeA(null);
       } else {
         setKinshipNodeB(member);
-        // Automatically trigger kinship calculation modal
         if (onOpenKinshipForTwo) {
           onOpenKinshipForTwo(kinshipNodeA.id, member.id);
         } else if (onOpenKinshipForMember) {
@@ -537,16 +566,16 @@ export default function FamilyTreeCanvas({
     }
   };
 
-  // Helper to render an individual Member Card
-  const renderCard = (
-    member: MemberNode,
-    isSpouse = false,
-    partnerName?: string
-  ) => {
+  // Render individual member card
+  const renderCard = (member: MemberNode, isSpouse = false, partnerName?: string) => {
     const isHighlighted = highlightedMemberId === member.id;
     const isFemale = member.gender === "FEMALE";
     const isNodeA = kinshipNodeA?.id === member.id;
     const isNodeB = kinshipNodeB?.id === member.id;
+    const isMartyr =
+      Boolean(member.isMartyr) ||
+      member.biography?.toLowerCase().includes("liệt sĩ") ||
+      member.courtesyName?.toLowerCase().includes("liệt sĩ");
 
     return (
       <div
@@ -556,120 +585,119 @@ export default function FamilyTreeCanvas({
           handleCardClick(member);
         }}
         style={{ width: `${CARD_WIDTH}px`, height: `${CARD_HEIGHT}px` }}
-        className={`rounded-xl p-2.5 cursor-pointer transition-all duration-200 border relative flex flex-col justify-between shadow-md select-none ${
+        className={`rounded-2xl p-2.5 cursor-pointer transition-all duration-200 border-2 relative flex flex-col justify-between shadow-md select-none ${
           isNodeA
-            ? "ring-4 ring-[#E0A926] shadow-2xl border-[#E0A926] bg-[#16483E] scale-105 z-30"
+            ? "ring-4 ring-[#E0A926] shadow-2xl border-[#E0A926] scale-105 z-30"
             : isNodeB
-            ? "ring-4 ring-[#F06292] shadow-2xl border-[#F06292] bg-[#16483E] scale-105 z-30"
+            ? "ring-4 ring-[#F06292] shadow-2xl border-[#F06292] scale-105 z-30"
             : isHighlighted
             ? "ring-4 ring-[#E0A926] shadow-xl border-[#E0A926] scale-105 z-20"
             : "border-[#E0A926]/40 hover:border-[#E0A926] hover:shadow-xl hover:scale-102"
         } ${
-          isSpouse
-            ? "bg-gradient-to-br from-[#1E5F52]/90 to-[#236c5d] text-pink-50"
-            : "bg-gradient-to-br from-[#1E5F52] to-[#2B7A6A] text-white"
+          isFemale
+            ? "bg-gradient-to-br from-[#8B3A4A] via-[#9C274E] to-[#681313] text-pink-50"
+            : "bg-gradient-to-br from-[#1B5E4F] via-[#246B5C] to-[#124237] text-white"
         }`}
       >
-        {/* Kinship Selection Badge */}
+        {/* Kinship Badge overlay */}
         {isNodeA && (
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#E0A926] text-[#24150B] font-bold text-[10px] px-2.5 py-0.5 rounded-full shadow-md border border-white flex items-center space-x-1 whitespace-nowrap">
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#E0A926] text-[#24150B] font-bold text-[9px] px-2.5 py-0.5 rounded-full shadow-md border border-white flex items-center space-x-1 whitespace-nowrap">
             <span>① Tôi (Đang chọn)</span>
           </div>
         )}
         {isNodeB && (
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#F06292] text-white font-bold text-[10px] px-2.5 py-0.5 rounded-full shadow-md border border-white flex items-center space-x-1 whitespace-nowrap">
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#F06292] text-white font-bold text-[9px] px-2.5 py-0.5 rounded-full shadow-md border border-white flex items-center space-x-1 whitespace-nowrap">
             <span>② Đối chiếu</span>
           </div>
         )}
 
-        {/* Top Header: Avatar + Status + Quick Kinship trigger */}
+        {/* Top Header: Avatar + Status + Birth Order */}
         <div className="flex items-center justify-between">
-          <div
-            className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-[11px] shadow-xs overflow-hidden shrink-0 ${
-              isFemale
-                ? "border-2 border-[#F06292] bg-pink-900/60 text-pink-200"
-                : "border-2 border-[#E0A926] bg-emerald-950/60 text-amber-200"
-            }`}
-          >
-            {member.avatarUrl ? (
-              <img
-                src={member.avatarUrl}
-                alt={member.fullName}
-                className="w-full h-full rounded-full object-cover"
-              />
-            ) : (
-              <span>{member.fullName.charAt(0)}</span>
+          <div className="flex items-center space-x-1.5">
+            <div
+              className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-[11px] shadow-xs overflow-hidden shrink-0 ${
+                isFemale
+                  ? "border-2 border-[#F06292] bg-pink-950/70 text-pink-200"
+                  : "border-2 border-[#E0A926] bg-emerald-950/70 text-amber-200"
+              }`}
+            >
+              {member.avatarUrl ? (
+                <img
+                  src={member.avatarUrl}
+                  alt={member.fullName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span>{member.fullName.charAt(0)}</span>
+              )}
+            </div>
+
+            {/* Birth order badge */}
+            {member.birthOrder && (
+              <span className="text-[8px] font-bold px-1.5 py-0.2 rounded-md bg-amber-400/20 text-amber-200 border border-amber-300/30 whitespace-nowrap">
+                {member.birthOrder}
+              </span>
             )}
           </div>
 
+          {/* Right badges: Martyr Star or Lotus Deceased or Alive */}
           <div className="flex items-center space-x-1">
-            {/* Quick compare button */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setKinshipCompareMode(true);
-                setKinshipNodeA(member);
-              }}
-              title="Chọn người này để đối chiếu xưng hô trực hệ/bàng hệ"
-              className="p-1 rounded-full bg-white/10 hover:bg-[#E0A926] hover:text-[#24150B] text-amber-200 transition-colors"
-            >
-              <Compass className="w-3 h-3" />
-            </button>
-
-            {/* Alive / Deceased / Martyr Badge */}
-            {member.biography?.toLowerCase().includes("liệt sĩ") ||
-            member.courtesyName?.toLowerCase().includes("liệt sĩ") ? (
+            {isMartyr ? (
               <span
-                className="text-[8px] font-black px-1.5 py-0.2 rounded-full border bg-red-500/30 text-amber-200 border-red-400"
-                title="Liệt sĩ vẻ vang"
+                className="bg-red-600 text-amber-200 border border-amber-300 text-[8px] font-black px-1.5 py-0.2 rounded-full flex items-center space-x-0.5 shadow-2xs"
+                title="Liệt sĩ Quân đội Nhân dân Việt Nam"
               >
-                LS
+                <Star className="w-2.5 h-2.5 fill-amber-300 text-amber-300" />
+                <span>LS</span>
+              </span>
+            ) : !member.isAlive ? (
+              <span
+                className="bg-black/35 text-amber-200 border border-[#E0A926]/40 text-[8px] font-bold px-1.5 py-0.2 rounded-full flex items-center space-x-0.5"
+                title="Đã quy tiên (mất)"
+              >
+                <Flower2 className="w-2.5 h-2.5 text-[#F06292]" />
+                <span>Mất</span>
               </span>
             ) : (
               <span
-                className={`text-[8px] font-black px-1.5 py-0.2 rounded-full border ${
-                  member.isAlive
-                    ? "bg-emerald-400/20 text-emerald-200 border-emerald-400/40"
-                    : "bg-black/30 text-stone-300 border-stone-500/40"
-                }`}
-                title={member.isAlive ? "Còn sống" : "Đã mất"}
+                className="bg-emerald-400/20 text-emerald-200 border border-emerald-400/40 text-[8px] font-bold px-1.5 py-0.2 rounded-full"
+                title="Còn sống"
               >
-                {member.isAlive ? "C" : "M"}
+                Sống
               </span>
             )}
           </div>
         </div>
 
-        {/* Member Full Name */}
+        {/* Member Full Name & Courtesy */}
         <div className="text-center my-0.5">
           <h4 className="font-serif font-bold text-xs text-white tracking-wide uppercase line-clamp-1">
             {member.fullName}
           </h4>
           {member.courtesyName && (
             <p className="text-[9px] text-[#FADB7F] italic line-clamp-1">
-              ({member.courtesyName})
+              {member.courtesyName}
             </p>
           )}
         </div>
 
         {/* Footer Details: Years & Branch info */}
-        <div className="pt-1 border-t border-white/20 text-[9px] text-emerald-100/90 text-center space-y-0.5">
-          <p className="text-[9px] text-amber-200 font-mono">
+        <div className="pt-1 border-t border-white/20 text-[9px] text-center space-y-0.5">
+          <p className="text-[9px] text-amber-200 font-mono font-semibold">
             {member.birthSolar?.slice(0, 4) || "--"} -{" "}
             {member.isAlive ? "nay" : member.deathSolar?.slice(0, 4) || "--"}
           </p>
-          <p className="line-clamp-1 text-[9px] text-emerald-200">
+          <p className="line-clamp-1 text-[8.5px] text-emerald-100/80">
             {isSpouse && partnerName
               ? `Chính thất: ${partnerName}`
-              : member.branchName?.replace("Chi họ ", "Chi ") || "Trực hệ chính"}
+              : member.branchName || "Trực hệ chính"}
           </p>
         </div>
       </div>
     );
   };
 
-  // Render a Tree Unit (Primary member + optional spouse beside)
+  // Render tree unit (Primary member + optional spouse)
   const renderTreeUnit = (unit: TreeUnit) => {
     return (
       <div
@@ -683,10 +711,8 @@ export default function FamilyTreeCanvas({
         }}
         className="flex items-center space-x-2.5 z-10"
       >
-        {/* Primary member card */}
         {renderCard(unit.primary)}
 
-        {/* Marriage connector ring/heart if spouse present */}
         {unit.spouse && (
           <div className="flex items-center -mx-1 shrink-0 z-20">
             <div
@@ -698,253 +724,387 @@ export default function FamilyTreeCanvas({
           </div>
         )}
 
-        {/* Spouse card */}
         {unit.spouse && renderCard(unit.spouse, true, unit.primary.fullName)}
       </div>
     );
   };
 
-  // Flatten all units for rendering
-  const allRenderUnits: TreeUnit[] = [];
-  const collectAllUnits = (u: TreeUnit) => {
-    allRenderUnits.push(u);
-    u.children.forEach(collectAllUnits);
-  };
-  rootUnits.forEach(collectAllUnits);
+  const allRenderUnits = useMemo(() => {
+    const list: TreeUnit[] = [];
+    const traverse = (u: TreeUnit) => {
+      list.push(u);
+      u.children.forEach(traverse);
+    };
+    rootUnits.forEach(traverse);
+    return list;
+  }, [rootUnits]);
+
+  // Mini-map calculation
+  const miniMapBounds = useMemo(() => {
+    if (allRenderUnits.length === 0) return { minX: 0, maxX: 1000, minY: 0, maxY: 600 };
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    allRenderUnits.forEach((u) => {
+      if (u.x < minX) minX = u.x;
+      if (u.x + u.width > maxX) maxX = u.x + u.width;
+      if (u.y < minY) minY = u.y;
+      if (u.y + CARD_HEIGHT > maxY) maxY = u.y + CARD_HEIGHT;
+    });
+    return {
+      minX: Math.max(0, minX - 40),
+      maxX: maxX + 100,
+      minY: Math.max(0, minY - 40),
+      maxY: maxY + 100,
+    };
+  }, [allRenderUnits]);
 
   return (
-    <div className="relative w-full h-[calc(100vh-140px)] min-h-[660px] bg-[#FDFBF7] overflow-hidden flex border border-[#E8DEC7] rounded-3xl shadow-xs">
-      {/* 1. Left Collapsible Sidebar */}
-      <div
-        className={`bg-white border-r border-[#E8DEC7] transition-all duration-300 z-20 flex flex-col shrink-0 ${
-          sidebarOpen ? "w-72" : "w-0"
-        } overflow-hidden`}
-      >
-        <div className="p-4 border-b border-[#E8DEC7] bg-[#FDFBF7] flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="w-6 h-6 rounded-lg bg-[#1E5F52] flex items-center justify-center text-[#FADB7F]">
-              <Flower2 className="w-3.5 h-3.5" />
-            </div>
-            <h3 className="font-serif font-bold text-sm text-[#1E5F52]">
-              Gia phả dòng họ
-            </h3>
-          </div>
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(false)}
-            className="p-1 text-stone-400 hover:text-stone-700 rounded-md hover:bg-stone-100"
-            title="Thu gọn"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Search */}
-        <div className="p-3 border-b border-stone-100">
-          <form onSubmit={handleSearch} className="relative">
-            <Search className="w-3.5 h-3.5 text-stone-400 absolute left-2.5 top-2.5" />
-            <input
-              type="text"
-              placeholder="Tìm theo tên thành viên..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 text-xs bg-stone-50 border border-stone-200 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-[#1E5F52]"
-            />
-          </form>
-        </div>
-
-        {/* Clan Overview Card */}
-        <div className="p-3 flex-1 overflow-y-auto space-y-2.5">
-          <div className="p-3.5 rounded-2xl border-2 border-[#E0A926] bg-gradient-to-br from-[#FAF7EE] to-[#F5EEDC] shadow-xs">
-            <div className="flex items-center space-x-1.5 mb-1">
-              <span className="bg-[#C62828] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                Chính Tông
-              </span>
-              <span className="bg-[#1E5F52]/10 text-[#1E5F52] text-[10px] font-semibold px-2 py-0.5 rounded-full border border-[#1E5F52]/20">
-                Trực hệ chuẩn
-              </span>
-            </div>
-            <h4 className="font-serif font-bold text-xs text-[#1E5F52]">
-              {clanName}
-            </h4>
-            <p className="text-[10px] text-stone-500 mt-1">
-              {maxGeneration} thế hệ • {members.length} thành viên
-            </p>
-          </div>
-
-          <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider px-1 pt-1">
-            Lọc Theo Chi Nhánh
-          </p>
-
-          <button
-            type="button"
-            onClick={() => setSelectedBranch("ALL")}
-            className={`w-full text-left p-2.5 rounded-xl border text-xs font-medium transition-all ${
-              selectedBranch === "ALL"
-                ? "bg-[#1E5F52] text-white border-[#1E5F52] shadow-xs"
-                : "bg-white hover:bg-stone-50 border-stone-200 text-stone-700"
-            }`}
-          >
-            Toàn bộ dòng họ (Tất cả chi)
-          </button>
-
-          {branches.map((b) => (
+    <div
+      ref={containerRef}
+      className={`relative w-full flex flex-col bg-[#FCFBF7] overflow-hidden ${
+        isFullscreen ? "fixed inset-0 z-50 h-screen" : "h-[calc(100vh-140px)] min-h-[640px]"
+      }`}
+    >
+      {/* =========================================================================
+          1. CANVAS TOOLBAR (Full Control Panel)
+         ========================================================================= */}
+      <div className="bg-[#FAF7EE] border-b border-[#E8DEC7] px-4 py-2 flex flex-wrap items-center justify-between gap-2.5 z-30 shadow-2xs">
+        {/* Left: View mode switcher & Filters */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* View switcher */}
+          <div className="flex items-center bg-stone-200/70 rounded-xl p-0.5 border border-stone-300/60 shadow-inner">
             <button
-              key={b.id}
               type="button"
-              onClick={() => setSelectedBranch(b.id)}
-              className={`w-full text-left p-2.5 rounded-xl border text-xs font-medium transition-all ${
-                selectedBranch === b.id
-                  ? "bg-[#1E5F52] text-white border-[#1E5F52] shadow-xs"
-                  : "bg-white hover:bg-stone-50 border-stone-200 text-stone-700"
+              onClick={() => setViewMode("top-down")}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center space-x-1 transition-all ${
+                viewMode === "top-down"
+                  ? "bg-[#1E5F52] text-white shadow-xs"
+                  : "text-stone-700 hover:text-stone-900"
               }`}
+              title="Dạng cây dọc truyền thống (Top-Down)"
             >
-              {b.branchName}
+              <GitGraph className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Cây dọc</span>
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={() => setViewMode("left-right")}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center space-x-1 transition-all ${
+                viewMode === "left-right"
+                  ? "bg-[#1E5F52] text-white shadow-xs"
+                  : "text-stone-700 hover:text-stone-900"
+              }`}
+              title="Dạng cây ngang (Left-Right)"
+            >
+              <ArrowRight className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Cây ngang</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("table")}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center space-x-1 transition-all ${
+                viewMode === "table"
+                  ? "bg-[#1E5F52] text-white shadow-xs"
+                  : "text-stone-700 hover:text-stone-900"
+              }`}
+              title="Dạng danh sách bảng (Table View)"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Dạng bảng</span>
+            </button>
+          </div>
+
+          {/* Filter: Generation */}
+          <div className="flex items-center space-x-1 bg-white px-2.5 py-1 rounded-xl border border-stone-300 text-xs shadow-2xs">
+            <Layers className="w-3.5 h-3.5 text-[#1E5F52]" />
+            <select
+              value={selectedGeneration}
+              onChange={(e) => setSelectedGeneration(e.target.value)}
+              className="bg-transparent text-stone-800 text-xs focus:outline-none cursor-pointer font-medium"
+            >
+              <option value="ALL">Tất cả thế hệ</option>
+              <option value="1">Đến Đời I</option>
+              <option value="2">Đến Đời II</option>
+              <option value="3">Đến Đời III</option>
+              <option value="4">Đến Đời IV</option>
+              <option value="5">Đến Đời V</option>
+            </select>
+          </div>
+
+          {/* Filter: Branch */}
+          <div className="flex items-center space-x-1 bg-white px-2.5 py-1 rounded-xl border border-stone-300 text-xs shadow-2xs">
+            <Filter className="w-3.5 h-3.5 text-[#C62828]" />
+            <select
+              value={selectedBranch}
+              onChange={(e) => setSelectedBranch(e.target.value)}
+              className="bg-transparent text-stone-800 text-xs focus:outline-none cursor-pointer font-medium"
+            >
+              <option value="ALL">Tất cả chi nhánh</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.branchName}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-      </div>
 
-      {/* Sidebar expand button */}
-      {!sidebarOpen && (
-        <button
-          type="button"
-          onClick={() => setSidebarOpen(true)}
-          className="absolute left-3 top-3 z-30 p-2 bg-white/95 rounded-xl border border-[#E8DEC7] text-stone-600 shadow-md hover:text-[#1E5F52] transition-colors"
-          title="Mở danh mục dòng họ"
-        >
-          <ChevronRight className="w-4 h-4" />
-        </button>
-      )}
+        {/* Right: View controls & Action Buttons */}
+        <div className="flex items-center gap-2">
+          {/* Zoom controls */}
+          <div className="flex items-center bg-white rounded-xl border border-stone-300 shadow-2xs overflow-hidden">
+            <button
+              type="button"
+              onClick={handleZoomIn}
+              className="p-1.5 text-stone-600 hover:text-[#1E5F52] hover:bg-stone-50 transition-colors"
+              title="Phóng to"
+            >
+              <ZoomIn className="w-4 h-4" />
+            </button>
+            <span className="text-[11px] font-mono px-1.5 text-stone-600 border-x border-stone-200">
+              {Math.round(scale * 100)}%
+            </span>
+            <button
+              type="button"
+              onClick={handleZoomOut}
+              className="p-1.5 text-stone-600 hover:text-[#1E5F52] hover:bg-stone-50 transition-colors"
+              title="Thu nhỏ"
+            >
+              <ZoomOut className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={handleResetFit}
+              className="p-1.5 text-stone-600 hover:text-[#1E5F52] hover:bg-stone-50 border-l border-stone-200 transition-colors"
+              title="Vừa màn hình (Fit view)"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsLocked(!isLocked)}
+              className={`p-1.5 border-l border-stone-200 transition-colors ${
+                isLocked ? "bg-amber-100 text-amber-900" : "text-stone-600 hover:bg-stone-50"
+              }`}
+              title={isLocked ? "Đã khóa di chuyển" : "Cho phép kéo rê chuột"}
+            >
+              {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+            </button>
+            <button
+              type="button"
+              onClick={handleToggleFullscreen}
+              className="p-1.5 text-stone-600 hover:text-[#1E5F52] hover:bg-stone-50 border-l border-stone-200 transition-colors"
+              title="Toàn màn hình"
+            >
+              {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
+            </button>
+          </div>
 
-      {/* 2. Controls Toolbar & Kinship Compare Indicator */}
-      <div className="absolute top-3 right-4 z-30 flex items-center space-x-2">
-        {/* Kinship Mode Toggle Pill */}
-        <button
-          type="button"
-          onClick={() => {
-            if (kinshipCompareMode) {
-              setKinshipCompareMode(false);
-              setKinshipNodeA(null);
-              setKinshipNodeB(null);
-            } else {
-              setKinshipCompareMode(true);
-            }
-          }}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 shadow-md border ${
-            kinshipCompareMode
-              ? "bg-[#E0A926] text-[#24150B] border-[#92400E] animate-pulse"
-              : "bg-white text-stone-700 hover:bg-amber-50 border-stone-200"
-          }`}
-          title="Bật chế độ click 2 người để làm nổi bật đường nối và đối chiếu xưng hô"
-        >
-          <Compass className="w-3.5 h-3.5 text-[#C62828]" />
-          <span>{kinshipCompareMode ? "Đang chọn 2 người..." : "Đối chiếu xưng hô"}</span>
-        </button>
-
-        {kinshipNodeA && (
+          {/* Kinship compare toggle */}
           <button
             type="button"
             onClick={() => {
-              setKinshipNodeA(null);
-              setKinshipNodeB(null);
+              if (kinshipCompareMode) {
+                setKinshipCompareMode(false);
+                setKinshipNodeA(null);
+                setKinshipNodeB(null);
+              } else {
+                setKinshipCompareMode(true);
+              }
             }}
-            className="p-1.5 rounded-xl bg-white border border-stone-200 text-stone-500 hover:text-red-600 shadow-xs"
-            title="Hủy chọn đối chiếu"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
-        )}
-
-        {/* Zoom Controls */}
-        <div className="bg-white/95 backdrop-blur-xs rounded-xl border border-[#E8DEC7] p-1 flex items-center space-x-1 shadow-md">
-          <button
-            type="button"
-            onClick={handleZoomIn}
-            className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-600"
-            title="Phóng to"
-          >
-            <ZoomIn className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={handleZoomOut}
-            className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-600"
-            title="Thu nhỏ"
-          >
-            <ZoomOut className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={handleReset}
-            className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-600 font-mono text-[10px]"
-            title="Căn giữa"
-          >
-            {Math.round(scale * 100)}%
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsLocked(!isLocked)}
-            className={`p-1.5 rounded-lg transition-colors ${
-              isLocked
-                ? "bg-[#C62828] text-white"
-                : "hover:bg-stone-100 text-stone-600"
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 border transition-all shadow-2xs ${
+              kinshipCompareMode
+                ? "bg-[#E0A926] text-[#24150B] font-bold border-[#E0A926] shadow-sm animate-pulse"
+                : "bg-white text-stone-700 hover:text-[#1E5F52] border-stone-300"
             }`}
-            title={isLocked ? "Mở khóa di chuyển" : "Khóa vị trí"}
+            title="Bật chế độ chọn 2 người để tra cứu cách xưng hô chính xác"
           >
-            {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+            <Compass className="w-3.5 h-3.5 text-[#C62828]" />
+            <span className="hidden sm:inline">Tra cứu xưng hô</span>
           </button>
+
+          {/* Export dropdown */}
+          <div ref={exportRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              className="px-3 py-1.5 bg-white hover:bg-stone-50 text-stone-800 border border-stone-300 rounded-xl text-xs font-semibold flex items-center space-x-1.5 shadow-2xs transition-all"
+            >
+              <Download className="w-3.5 h-3.5 text-[#1E5F52]" />
+              <span className="hidden sm:inline">Xuất dữ liệu</span>
+              <ChevronDown className="w-3 h-3 text-stone-400" />
+            </button>
+
+            {showExportMenu && (
+              <div className="absolute right-0 mt-1.5 w-48 bg-white rounded-xl shadow-xl border border-stone-200 py-1.5 z-50 animate-fade-in text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowExportMenu(false);
+                    exportFamilyToExcel(members, clanName);
+                  }}
+                  className="w-full px-3 py-2 text-left hover:bg-emerald-50 flex items-center space-x-2 text-stone-700"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  <span>Xuất Excel (.xlsx / CSV)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowExportMenu(false);
+                    exportFamilyToGedcom(members, clanName);
+                  }}
+                  className="w-full px-3 py-2 text-left hover:bg-emerald-50 flex items-center space-x-2 text-stone-700"
+                >
+                  <FileCode className="w-4 h-4 text-blue-600" />
+                  <span>Xuất GEDCOM (.ged)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowExportMenu(false);
+                    printOrExportA0();
+                  }}
+                  className="w-full px-3 py-2 text-left hover:bg-emerald-50 flex items-center space-x-2 text-stone-700"
+                >
+                  <Printer className="w-4 h-4 text-amber-600" />
+                  <span>In / Xuất PDF A0 cuộn</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* 3. Main Interactive Canvas */}
+      {/* =========================================================================
+          2. MAIN CANVAS VIEW AREA
+         ========================================================================= */}
       <div
-        ref={containerRef}
+        ref={canvasRef}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        className={`flex-1 relative cursor-grab active:cursor-grabbing select-none bg-[#FDFBF7] bg-lotus-watermark overflow-hidden ${
-          isLocked ? "cursor-default" : ""
+        onWheel={handleWheel}
+        className={`flex-1 relative overflow-hidden select-none ${
+          isLocked ? "cursor-default" : isDragging ? "cursor-grabbing" : "cursor-grab"
         }`}
+        style={{
+          backgroundColor: "#FCFBF7",
+          backgroundImage: `
+            radial-gradient(circle at 50% 50%, rgba(197, 155, 39, 0.05) 0%, transparent 60%),
+            radial-gradient(#E8DEC7 0.8px, transparent 0.8px)
+          `,
+          backgroundSize: "100% 100%, 28px 28px",
+        }}
       >
-        {loading ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-30">
-            <div className="text-center p-6 bg-white rounded-2xl border border-stone-200 shadow-xl">
-              <div className="w-8 h-8 border-4 border-[#1E5F52] border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-              <p className="text-xs font-semibold text-stone-700">
-                Đang dựng sơ đồ trực hệ gia phả...
-              </p>
+        {/* Table view alternative if selected */}
+        {viewMode === "table" ? (
+          <div className="absolute inset-0 p-6 overflow-y-auto bg-white z-20">
+            <div className="max-w-6xl mx-auto space-y-4">
+              <div className="flex items-center justify-between border-b pb-3">
+                <h3 className="font-serif font-bold text-lg text-[#1E5F52]">
+                  Danh Sách Phả Hệ Dòng Họ ({members.length} thành viên)
+                </h3>
+                <span className="text-xs text-stone-500">
+                  Phân bố từ Đời I đến Đời {maxGeneration}
+                </span>
+              </div>
+              <table className="w-full text-xs text-left border-collapse">
+                <thead>
+                  <tr className="bg-stone-100 text-stone-700 font-bold border-b border-stone-200">
+                    <th className="p-2.5">Mã</th>
+                    <th className="p-2.5">Họ và Tên</th>
+                    <th className="p-2.5">Thứ Bậc</th>
+                    <th className="p-2.5">Giới Tính</th>
+                    <th className="p-2.5">Đời Thứ</th>
+                    <th className="p-2.5">Chi Nhánh</th>
+                    <th className="p-2.5">Năm Sinh - Mất</th>
+                    <th className="p-2.5">Trạng Thái</th>
+                    <th className="p-2.5 text-center">Thao Tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-200">
+                  {members.map((m) => (
+                    <tr
+                      key={m.id}
+                      onClick={() => onSelectMember(m)}
+                      className="hover:bg-emerald-50/50 cursor-pointer transition-colors"
+                    >
+                      <td className="p-2.5 font-mono text-stone-500">{m.memberCode}</td>
+                      <td className="p-2.5 font-bold font-serif text-stone-900">{m.fullName}</td>
+                      <td className="p-2.5 text-stone-600">{m.birthOrder || "--"}</td>
+                      <td className="p-2.5">{m.gender === "MALE" ? "Nam" : "Nữ"}</td>
+                      <td className="p-2.5 font-semibold text-[#1E5F52]">Đời {m.generation}</td>
+                      <td className="p-2.5 text-stone-600">{m.branchName || "Chưa phân chi"}</td>
+                      <td className="p-2.5 font-mono text-stone-700">
+                        {m.birthSolar?.slice(0, 4) || "--"} -{" "}
+                        {m.isAlive ? "nay" : m.deathSolar?.slice(0, 4) || "--"}
+                      </td>
+                      <td className="p-2.5">
+                        {m.isMartyr ? (
+                          <span className="bg-red-100 text-red-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                            Liệt Sĩ
+                          </span>
+                        ) : m.isAlive ? (
+                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                            Còn sống
+                          </span>
+                        ) : (
+                          <span className="bg-stone-100 text-stone-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                            Đã mất
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-2.5 text-center">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectMember(m);
+                          }}
+                          className="px-2.5 py-1 bg-stone-100 hover:bg-[#1E5F52] hover:text-white rounded-md text-[10px] font-semibold transition-colors"
+                        >
+                          Chi tiết
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         ) : (
+          /* Tree View (Top-Down or Left-Right Canvas) */
           <div
             style={{
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
               transformOrigin: "0 0",
-              transition: isDragging ? "none" : "transform 0.15s ease-out",
+              width: "4800px",
+              height: "2800px",
             }}
-            className="inline-block p-8 min-w-[2000px] min-h-[1400px] relative"
+            className="absolute top-0 left-0 transition-transform duration-75"
           >
-            {/* TOP HEADER: Banner cuốn thư đỏ son ghi chữ "Gia phả dòng họ" flanked by Dual Golden Dragons */}
-            <div className="flex items-center justify-center mb-10 relative px-4">
+            {/* TRADITIONAL ROYAL BANNER (Cuốn thư phả hệ đại tông) */}
+            <div className="absolute left-[380px] top-6 flex items-center justify-center z-10 pointer-events-auto">
               <VerticalScroll text="TổTiênCôngĐứcThiênNiênThịnh" position="left" />
               <GoldenDragon flip={false} />
 
-              <div className="relative mx-3 max-w-xl text-center px-8 py-3.5 rounded-2xl bg-gradient-to-r from-[#991B1B] via-[#C62828] to-[#991B1B] text-white border-2 border-[#E0A926] shadow-xl">
-                <div className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 rounded-full bg-[#E0A926] border border-white"></div>
-                <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-[#E0A926] border border-white"></div>
-                <div className="absolute -bottom-1.5 -left-1.5 w-3.5 h-3.5 rounded-full bg-[#E0A926] border border-white"></div>
-                <div className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-[#E0A926] border border-white"></div>
-
-                <p className="text-[10px] uppercase font-bold tracking-widest text-[#FADB7F] mb-0.5">
-                  TÔNG ĐỒ GIA PHẢ CHÍNH THỐNG
-                </p>
-                <h2 className="text-2xl sm:text-3xl font-extrabold font-serif text-[#FADB7F] tracking-wide drop-shadow-sm">
-                  Gia phả dòng họ
+              {/* Scroll Body */}
+              <div className="relative mx-3 bg-gradient-to-r from-[#8B1E1E] via-[#A91B1B] to-[#8B1E1E] text-white px-7 py-3 rounded-2xl shadow-xl border-2 border-[#E0A926] text-center min-w-[340px]">
+                <div className="flex items-center justify-center space-x-1.5 mb-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#E0A926]"></span>
+                  <span className="text-[10px] tracking-widest text-[#FADB7F] uppercase font-bold">
+                    Sơ Đồ Phả Hệ Trực Hệ
+                  </span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#E0A926]"></span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-serif font-black text-[#FADB7F] tracking-wide drop-shadow-sm">
+                  {clanName}
                 </h2>
                 <p className="text-[11px] text-amber-100/90 italic font-serif mt-0.5">
-                  (Sơ Đồ Phả Hệ Trực Hệ & Quan Hệ Huyết Thống)
+                  Cụ Khởi Tổ Phan Thạnh — Truyền Thừa Hậu Duệ Trực Hệ
                 </p>
               </div>
 
@@ -952,8 +1112,8 @@ export default function FamilyTreeCanvas({
               <VerticalScroll text="TửHiếuTônHiềnVạnĐạiVinh" position="right" />
             </div>
 
-            {/* LEFT GENERATION RAIL BADGES (Đời I, Đời II, Đời III, Đời IV, Đời V...) */}
-            <div className="absolute left-4 top-0 bottom-0 pointer-events-none z-20">
+            {/* LEFT GENERATION RAIL BADGES (Đời I, Đời II, Đời III) */}
+            <div className="absolute left-6 top-0 bottom-0 pointer-events-none z-20">
               {Array.from({ length: maxGeneration }, (_, i) => i + 1).map((genNum) => {
                 const badgeY = ROW_START_Y + (genNum - 1) * (CARD_HEIGHT + ROW_GAP);
                 return (
@@ -966,10 +1126,10 @@ export default function FamilyTreeCanvas({
                     }}
                     className="flex flex-col items-center justify-center w-14"
                   >
-                    <div className="w-11 h-11 rounded-full bg-[#1E5F52] border-2 border-[#E0A926] shadow-md flex items-center justify-center text-white font-serif font-black text-xs hover:scale-105 transition-transform">
+                    <div className="w-12 h-12 rounded-full bg-[#1E5F52] border-2 border-[#E0A926] shadow-md flex items-center justify-center text-white font-serif font-black text-xs hover:scale-105 transition-transform">
                       {romanGenerations[genNum] || genNum}
                     </div>
-                    <span className="text-[9px] font-bold text-[#1E5F52] mt-0.5 font-serif bg-[#FDFBF7] px-1 rounded-sm border border-[#1E5F52]/20">
+                    <span className="text-[9.5px] font-bold text-[#1E5F52] mt-0.5 font-serif bg-[#FCFBF7] px-1.5 py-0.2 rounded-sm border border-[#1E5F52]/30 shadow-2xs">
                       Đời {genNum}
                     </span>
                   </div>
@@ -990,7 +1150,6 @@ export default function FamilyTreeCanvas({
 
               {connectors.map((conn, idx) => (
                 <g key={`${conn.parentId}-${conn.childId}-${idx}`}>
-                  {/* Base / Background Orthogonal Line */}
                   <path
                     d={conn.pathString}
                     fill="none"
@@ -1002,18 +1161,13 @@ export default function FamilyTreeCanvas({
                     filter={conn.isHighlighted ? "url(#gold-glow)" : "none"}
                     className={conn.isHighlighted ? "animate-pulse" : ""}
                   />
-
-                  {/* Joint node circles at orthogonal turns */}
                   {!conn.isHighlighted && (
-                    <>
-                      {/* Joint point at midY on child branch */}
-                      <circle
-                        cx={conn.childUnit.x + CARD_WIDTH / 2}
-                        cy={conn.midY}
-                        r="3"
-                        fill="#2E7D68"
-                      />
-                    </>
+                    <circle
+                      cx={conn.childUnit.x + CARD_WIDTH / 2}
+                      cy={conn.midY}
+                      r="3"
+                      fill="#2E7D68"
+                    />
                   )}
                 </g>
               ))}
@@ -1025,6 +1179,111 @@ export default function FamilyTreeCanvas({
             </div>
           </div>
         )}
+
+        {/* =========================================================================
+            3. MINI-MAP (Bottom Right Overview)
+           ========================================================================= */}
+        {viewMode !== "table" && (
+          <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-md p-2 rounded-xl border border-stone-300 shadow-lg z-30 pointer-events-auto">
+            <div className="flex items-center justify-between mb-1 px-1">
+              <span className="text-[9px] font-bold text-stone-500 uppercase tracking-wider">
+                Bản đồ thu nhỏ
+              </span>
+              <span className="text-[9px] font-mono text-stone-400">
+                {members.length} người
+              </span>
+            </div>
+            <div className="relative w-36 h-24 bg-stone-100 rounded-lg overflow-hidden border border-stone-200">
+              {/* Mini nodes representation */}
+              {allRenderUnits.map((u) => {
+                const miniX =
+                  ((u.x - miniMapBounds.minX) / (miniMapBounds.maxX - miniMapBounds.minX || 1)) * 140;
+                const miniY =
+                  ((u.y - miniMapBounds.minY) / (miniMapBounds.maxY - miniMapBounds.minY || 1)) * 90;
+                return (
+                  <div
+                    key={`mini-${u.id}`}
+                    style={{
+                      left: `${Math.max(2, Math.min(130, miniX))}px`,
+                      top: `${Math.max(2, Math.min(80, miniY))}px`,
+                    }}
+                    className={`absolute w-3 h-2 rounded-xs ${
+                      u.primary.gender === "FEMALE" ? "bg-[#9C274E]" : "bg-[#1E5F52]"
+                    }`}
+                  />
+                );
+              })}
+              {/* Viewport frame indicator */}
+              <div
+                style={{
+                  left: `${Math.max(0, -pan.x / 30)}px`,
+                  top: `${Math.max(0, -pan.y / 30)}px`,
+                  width: "48px",
+                  height: "36px",
+                }}
+                className="absolute border border-[#E0A926] bg-[#E0A926]/20 rounded-xs pointer-events-none"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================================
+            4. LEGEND (Bottom Left Quy Ước Ký Hiệu)
+           ========================================================================= */}
+        <div className="absolute bottom-4 left-4 z-30 pointer-events-auto">
+          {showLegend ? (
+            <div className="bg-white/95 backdrop-blur-md p-3 rounded-xl border border-stone-300 shadow-lg text-[11px] text-stone-700 space-y-2 max-w-xs animate-fade-in">
+              <div className="flex items-center justify-between border-b pb-1 font-bold text-stone-900">
+                <span className="flex items-center space-x-1.5">
+                  <Info className="w-3.5 h-3.5 text-[#1E5F52]" />
+                  <span>Chú giải ký hiệu phả hệ</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowLegend(false)}
+                  className="text-stone-400 hover:text-stone-600 text-xs"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[10px]">
+                <div className="flex items-center space-x-1.5">
+                  <span className="w-3.5 h-3 rounded-xs bg-[#1E5F52] border border-[#E0A926]/40 shrink-0"></span>
+                  <span>Nam (Xanh ngọc)</span>
+                </div>
+                <div className="flex items-center space-x-1.5">
+                  <span className="w-3.5 h-3 rounded-xs bg-[#9C274E] border border-[#E0A926]/40 shrink-0"></span>
+                  <span>Nữ (Hồng sen)</span>
+                </div>
+                <div className="flex items-center space-x-1.5">
+                  <Flower2 className="w-3 h-3 text-[#F06292] shrink-0" />
+                  <span>Người đã khuất</span>
+                </div>
+                <div className="flex items-center space-x-1.5">
+                  <Star className="w-3 h-3 fill-red-600 text-red-600 shrink-0" />
+                  <span>Liệt sĩ có công</span>
+                </div>
+                <div className="flex items-center space-x-1.5">
+                  <div className="w-4 h-0.5 bg-[#2E7D68] shrink-0"></div>
+                  <span>Đường trực hệ</span>
+                </div>
+                <div className="flex items-center space-x-1.5">
+                  <Heart className="w-3 h-3 fill-[#C62828] text-[#C62828] shrink-0" />
+                  <span>Hôn phối (Vợ chồng)</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowLegend(true)}
+              className="bg-white/90 hover:bg-white text-stone-700 px-3 py-1.5 rounded-xl border border-stone-300 shadow-md text-xs font-semibold flex items-center space-x-1.5 transition-all"
+            >
+              <Info className="w-3.5 h-3.5 text-[#1E5F52]" />
+              <span>Xem chú giải</span>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
