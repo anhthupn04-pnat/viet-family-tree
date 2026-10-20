@@ -1,0 +1,202 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id               String       @id @default(uuid())
+  email            String       @unique
+  passwordHash     String
+  name             String
+  role             String       @default("MEMBER") // ADMIN, BRANCH_MANAGER, MEMBER, GUEST
+  assignedBranchId String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+}
+
+model Clan {
+  id                 String               @id @default(uuid())
+  name               String
+  couplet1           String?              // Câu đối 1: Tổ Tiên Công Đức Thiên Niên Thịnh
+  couplet2           String?              // Câu đối 2: Tử Hiếu Tôn Hiền Vạn Đại Vinh
+  originLocation     String               // Quê hương phát tích: e.g. Nga Sơn, Thanh Hóa
+  mainRegion         String               @default("Miền Bắc") // Miền Bắc, Miền Trung, Miền Nam
+  slug               String               @unique
+  ancestralHall      String?              // Từ đường / Nhà thờ họ
+  historySummary     String?
+  isPublic           Boolean              @default(true)
+  allowMemberInvite  Boolean              @default(true)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  branches           ClanBranch[]
+  members            MemberProfile[]
+  anniversaries      AncestorAnniversary[]
+  events             ClanEvent[]
+  documents          ClanDocument[]
+  funds              ClanFund[]
+  changeRequests     ChangeRequest[]
+  auditLogs          AuditLog[]
+}
+
+model ClanBranch {
+  id             String          @id @default(uuid())
+  clanId         String
+  clan           Clan            @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  branchName     String          // Chi 1 - Trưởng Chi, Chi 2 - Chi Giáp...
+  branchOrder    Int             @default(1)
+  leaderName     String?         // Người đứng đầu chi
+  description    String?
+  residenceArea  String?         // Địa bàn cư trú chủ yếu
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  members        MemberProfile[]
+}
+
+model MemberProfile {
+  id               String         @id @default(uuid())
+  clanId           String
+  clan             Clan           @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  branchId         String?
+  branch           ClanBranch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  memberCode       String         @unique // Mã thành viên: GP-001...
+  fullName         String
+  courtesyName     String?        // Tên tự, húy, pháp danh
+  gender           String         @default("MALE") // MALE, FEMALE, UNKNOWN
+  generation       Int            @default(1) // Đời thứ
+  birthSolar       String?        // Ngày sinh dương lịch
+  birthLunar       String?        // Ngày sinh âm lịch
+  deathSolar       String?        // Ngày mất dương lịch
+  deathLunar       String?        // Ngày mất âm lịch
+  isAlive          Boolean        @default(true)
+  burialPlace      String?        // Mộ phần / nơi an táng
+  hometown         String?        // Quê quán
+  currentResidence String?        // Nơi cư trú
+  avatarUrl        String?
+  biography        String?        // Tiểu sử, học vị, công danh
+  phone            String?        // Số điện thoại (chỉ hiện với thành viên có quyền)
+  isVerified       Boolean        @default(true)
+  
+  fatherId         String?
+  father           MemberProfile? @relation("FatherToChildren", fields: [fatherId], references: [id], onDelete: SetNull)
+  childrenAsFather MemberProfile[] @relation("FatherToChildren")
+
+  motherId         String?
+  mother           MemberProfile? @relation("MotherToChildren", fields: [motherId], references: [id], onDelete: SetNull)
+  childrenAsMother MemberProfile[] @relation("MotherToChildren")
+
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  husbandMarriages Marriage[]     @relation("HusbandRelation")
+  wifeMarriages    Marriage[]     @relation("WifeRelation")
+  anniversaries    AncestorAnniversary[]
+}
+
+model Marriage {
+  id            String        @id @default(uuid())
+  husbandId     String
+  husband       MemberProfile @relation("HusbandRelation", fields: [husbandId], references: [id], onDelete: Cascade)
+  wifeId        String
+  wife          MemberProfile @relation("WifeRelation", fields: [wifeId], references: [id], onDelete: Cascade)
+  marriageOrder Int           @default(1) // 1: Vợ cả, 2: Vợ thứ...
+  status        String        @default("MARRIED")
+  note          String?
+  createdAt     DateTime      @default(now())
+}
+
+model AncestorAnniversary {
+  id                 String         @id @default(uuid())
+  clanId             String
+  clan               Clan           @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  memberId           String?
+  member             MemberProfile? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  title              String         // Lễ Giỗ Cụ Khởi Tổ
+  lunarDay           Int            // Ngày âm (1 - 30)
+  lunarMonth         Int            // Tháng âm (1 - 12)
+  isLeapMonth        Boolean        @default(false)
+  solarDay           Int?
+  solarMonth         Int?
+  location           String?        // Địa điểm tổ chức
+  description        String?
+  reminderDaysBefore Int            @default(7)
+  createdAt          DateTime       @default(now())
+}
+
+model ClanEvent {
+  id          String    @id @default(uuid())
+  clanId      String
+  clan        Clan      @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  title       String
+  category    String    @default("NEWS") // NEWS, CEREMONY, MEETING, WEDDING, FUNERAL
+  content     String
+  eventDate   DateTime?
+  location    String?
+  isPublic    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model ClanDocument {
+  id          String   @id @default(uuid())
+  clanId      String
+  clan        Clan     @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  title       String
+  type        String   @default("IMAGE") // IMAGE, EPITAPH, BOOK, RECORD, CERTIFICATE
+  fileUrl     String
+  era         String?  // Niên đại (Ví dụ: Thời Lê Sơ, Thế kỷ 18, 1945...)
+  author      String?
+  description String?
+  createdAt   DateTime @default(now())
+}
+
+model ClanFund {
+  id                     String   @id @default(uuid())
+  clanId                 String
+  clan                   Clan     @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  fundType               String   @default("GENERAL") // GENERAL, CONSTRUCTION, SCHOLARSHIP, CHARITY
+  transactionType        String   @default("INCOME")  // INCOME (Thu), EXPENSE (Chi)
+  amount                 Float
+  title                  String   // Đóng góp tu bổ từ đường / Học bổng con em đỗ đại học
+  contributorOrRecipient String   // Người đóng góp / Người nhận
+  date                   DateTime @default(now())
+  status                 String   @default("APPROVED") // PENDING, APPROVED
+  approvedBy             String?
+  receiptUrl             String?
+  notes                  String?
+  createdAt              DateTime @default(now())
+}
+
+model ChangeRequest {
+  id              String    @id @default(uuid())
+  clanId          String
+  clan            Clan      @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  memberId        String?
+  requesterName   String
+  requesterEmail  String?
+  changeType      String    // ADD_MEMBER, UPDATE_PROFILE, ADD_RELATION
+  proposedData    String    // JSON string describing proposed changes
+  reason          String
+  evidenceSource  String    // Nguồn tư liệu: Gia phả chữ Hán, văn bia, lời kể cụ trưởng...
+  status          String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  reviewerNote    String?
+  reviewedAt      DateTime?
+  createdAt       DateTime  @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  clanId    String
+  clan      Clan     @relation(fields: [clanId], references: [id], onDelete: Cascade)
+  userName  String
+  userEmail String
+  action    String   // TẠO THÀNH VIÊN, SỬA CHI NHÁNH, THU QUỸ...
+  target    String
+  details   String?
+  createdAt DateTime @default(now())
+}

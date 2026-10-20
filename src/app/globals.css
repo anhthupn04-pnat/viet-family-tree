@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #fdfcf9;
+    --foreground: #231f1e;
+    --primary: #8b1e1e;
+    --primary-hover: #721515;
+    --gold: #c59b27;
+  }
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Họa tiết hoa văn truyền thống Đông Sơn / Trống đồng */
+.bg-drum-pattern {
+  background-color: #8b1e1e;
+  background-image: radial-gradient(#c59b27 0.75px, transparent 0.75px), radial-gradient(#c59b27 0.75px, #8b1e1e 0.75px);
+  background-size: 30px 30px;
+  background-position: 0 0, 15px 15px;
+}
+
+.bg-parchment-pattern {
+  background-color: #faf7ee;
+  background-image: radial-gradient(#e5dfcf 0.75px, transparent 0.75px);
+  background-size: 20px 20px;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1ebd9;
+}
+::-webkit-scrollbar-thumb {
+  background: #c59b27;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8b1e1e;
+}
+
+/* Hiệu ứng khung viền truyền thống */
+.border-traditional {
+  border: 1px solid #e2d7ba;
+  box-shadow: 0 4px 14px 0 rgba(139, 30, 30, 0.05);
+}
+
+.card-gold-glow:hover {
+  box-shadow: 0 8px 24px -4px rgba(197, 155, 39, 0.25);
+  border-color: #c59b27;
+}
+
+/* Grid canvas dots cho cây gia phả */
+.canvas-grid {
+  background-color: #fcfbfa;
+  background-image: radial-gradient(#d5ccb8 1px, transparent 1px);
+  background-size: 24px 24px;
+}
