@@ -315,6 +315,44 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
         shareSlug: shareSlug.trim() || undefined,
         accessPassword: sharePassword.trim() || undefined,
       });
+
+      // Nếu bật công khai, tự động đồng bộ danh sách thành viên hiện có lên database để người xem thấy đầy đủ
+      if (shareIsPublic) {
+        let membersToSync: any[] = [];
+        if (activeTreeId === sharingTree.id && Array.isArray(members) && members.length > 0) {
+          membersToSync = members;
+        } else {
+          try {
+            const key = sharingTree.id === "tree-phan-family" ? "viet_family_tree_members_v2" : `tree_members_${sharingTree.id}`;
+            const stored = localStorage.getItem(key);
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                membersToSync = parsed;
+              }
+            }
+          } catch (e) {}
+        }
+
+        if (membersToSync.length > 0) {
+          try {
+            await fetch(`/api/trees/${sharingTree.id}/import`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-user-email": currentAdmin?.email || "anhthuphan0102@gmail.com",
+              },
+              body: JSON.stringify({
+                members: membersToSync,
+                upsertMode: "overwrite",
+              }),
+            });
+          } catch (syncErr) {
+            console.warn("Lỗi đồng bộ thành viên khi bật chia sẻ:", syncErr);
+          }
+        }
+      }
+
       setShareMsg({ type: "success", text: "Đã lưu cấu hình chia sẻ công khai thành công!" });
       setTimeout(() => {
         setSharingTree(null);

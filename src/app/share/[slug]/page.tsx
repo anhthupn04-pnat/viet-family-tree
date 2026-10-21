@@ -489,31 +489,59 @@ function PublicShareTreeContent() {
 
       {/* Main Interactive Flow Canvas */}
       <div className="flex-1 w-full h-full relative bg-lotus-watermark">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          fitView
-          fitViewOptions={{ padding: 0.2 }}
-          minZoom={0.15}
-          maxZoom={2.0}
-          nodesDraggable={false} // Strict Read-only: Không cho kéo node
-          nodesConnectable={false}
-          elementsSelectable={true}
-          proOptions={{ hideAttribution: true }}
-        >
-          <Background color="#cbd5e1" gap={20} size={1} variant={BackgroundVariant.Dots} />
-          <Controls position="bottom-right" className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden m-4" />
-        </ReactFlow>
+        {members.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center p-6 space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-slate-800/90 border border-slate-700 flex items-center justify-center text-slate-400 shadow-xl">
+              <Users className="w-8 h-8 text-blue-400" />
+            </div>
+            <div className="max-w-md space-y-1.5">
+              <h3 className="text-base font-bold text-white">Chưa có thành viên nào trong cây gia phả</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Cây gia phả này hiện đang ở giai đoạn khởi tạo. Bạn có thể gửi thông tin đề xuất đóng góp thành viên đầu tiên để Ban Quản Trị xem xét.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setCrowdsourceTarget(null);
+                setCrowdsourceType("ADD_CHILD");
+                setShowCrowdsourceModal(true);
+              }}
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95"
+            >
+              <HeartHandshake className="w-4 h-4" />
+              <span>Gửi Đóng Góp Thành Viên Đầu Tiên</span>
+            </button>
+          </div>
+        ) : (
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            fitView
+            fitViewOptions={{ padding: 0.2 }}
+            minZoom={0.15}
+            maxZoom={2.0}
+            nodesDraggable={false} // Strict Read-only: Không cho kéo node
+            nodesConnectable={false}
+            elementsSelectable={true}
+            proOptions={{ hideAttribution: true }}
+          >
+            <Background color="#cbd5e1" gap={20} size={1} variant={BackgroundVariant.Dots} />
+            <Controls position="bottom-right" className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden m-4" />
+          </ReactFlow>
+        )}
 
         {/* Privacy Note Overlay Pill */}
-        <div className="absolute bottom-4 left-4 z-10 bg-slate-900/80 backdrop-blur-xs text-white px-3 py-1.5 rounded-full text-[10px] font-medium border border-slate-700/80 shadow-md hidden sm:flex items-center gap-1.5">
-          <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-          <span>Bảo vệ quyền riêng tư: SĐT người còn sống đã được làm mờ</span>
-        </div>
+        {members.length > 0 && (
+          <div className="absolute bottom-4 left-4 z-10 bg-slate-900/80 backdrop-blur-xs text-white px-3 py-1.5 rounded-full text-[10px] font-medium border border-slate-700/80 shadow-md hidden sm:flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+            <span>Bảo vệ quyền riêng tư: SĐT người còn sống đã được làm mờ</span>
+          </div>
+        )}
       </div>
 
       {/* Drawer Xem Chi Tiết (Read-Only & Crowdsourcing) */}

@@ -4,7 +4,10 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
-  // Kiểm tra nếu đã có dữ liệu thì bảo toàn toàn bộ dữ liệu hiện có, không xóa
+  // Luôn đảm bảo Multi-Tree và các cây gia phả mặc định được khởi tạo
+  await seedMultiTrees();
+
+  // Kiểm tra nếu đã có dữ liệu MemberProfile thì bảo toàn dữ liệu hiện có
   const existingCount = await prisma.memberProfile.count();
   if (existingCount > 0) {
     console.log(`✓ Đã có ${existingCount} thành viên trong Database. Bảo lưu toàn bộ dữ liệu hiện có, không khôi phục gốc.`);
@@ -447,6 +450,132 @@ async function main() {
   });
 
   console.log('--- KHỞI TẠO DỮ LIỆU MẪU HOÀN TẤT THÀNH CÔNG ---');
+}
+
+async function seedMultiTrees() {
+  console.log('--- Kiểm tra và khởi tạo dữ liệu Multi-Tree (Tree & TreeMember) ---');
+
+  // 1. CÂY TỘC PHAN
+  await prisma.tree.upsert({
+    where: { id: 'tree-phan-family' },
+    create: {
+      id: 'tree-phan-family',
+      name: 'Gia Phả Tộc Phan (Quảng Nam)',
+      slug: 'gia-pha-toc-phan',
+      shareSlug: 'gia-pha-toc-phan',
+      originLocation: 'Điện Bàn, Quảng Nam',
+      description: 'Cây gia phả chính thống của dòng tộc Phan Thạnh',
+      status: 'ACTIVE',
+      creatorId: 'admin-super',
+      isPublic: true,
+    },
+    update: {
+      slug: 'gia-pha-toc-phan',
+      shareSlug: 'gia-pha-toc-phan',
+      isPublic: true,
+      status: 'ACTIVE',
+    },
+  });
+
+  // 2. CÂY TỘC TRẦN (HUẾ)
+  await prisma.tree.upsert({
+    where: { id: 'tree-tran-family' },
+    create: {
+      id: 'tree-tran-family',
+      name: 'Gia Phả Tộc Trần (Huế)',
+      slug: 'gia-pha-toc-tran-hue',
+      shareSlug: 'gia-pha-toc-tran-hue',
+      originLocation: 'Hương Thủy, Thừa Thiên Huế',
+      description: 'Nhánh gia phả bên ngoại Tộc Trần',
+      status: 'ACTIVE',
+      creatorId: 'admin-super',
+      isPublic: true,
+    },
+    update: {
+      slug: 'gia-pha-toc-tran-hue',
+      shareSlug: 'gia-pha-toc-tran-hue',
+      isPublic: true,
+      status: 'ACTIVE',
+    },
+  });
+
+  // 3. CÂY TỘC LÊ (THANH HÓA)
+  await prisma.tree.upsert({
+    where: { id: 'tree-le-family' },
+    create: {
+      id: 'tree-le-family',
+      name: 'Gia Phả Tộc Lê (Thanh Hóa)',
+      slug: 'gia-pha-toc-le-thanh-hoa',
+      shareSlug: 'gia-pha-toc-le-thanh-hoa',
+      originLocation: 'Nga Sơn, Thanh Hóa',
+      description: 'Cây phả hệ Tộc Lê phát tích miền Bắc',
+      status: 'ACTIVE',
+      creatorId: 'admin-super',
+      isPublic: true,
+    },
+    update: {
+      slug: 'gia-pha-toc-le-thanh-hoa',
+      shareSlug: 'gia-pha-toc-le-thanh-hoa',
+      isPublic: true,
+      status: 'ACTIVE',
+    },
+  });
+
+  const allMembers = [
+    // Phan Members
+    { id: 'phan-thanh', treeId: 'tree-phan-family', fullName: 'Phan Thạnh', nickname: 'Cụ Khởi Tổ (Hiệu Phúc Thiện)', gender: 'male', generation: 1, orderInFamily: 1, birthDate: '12/04/1910', deathDate: '16 tháng 3 Âm lịch (1985)', isAlive: false, spouseId: 'tran-thi-hoang', phone: '0903112233', address: 'Điện Bàn, Quảng Nam', notes: 'Cụ Khởi Tổ (Hiệu Phúc Thiện)' },
+    { id: 'tran-thi-hoang', treeId: 'tree-phan-family', fullName: 'Trần Thị Hoàng', nickname: 'Cụ Bà Chính Thất (Hiệu Từ Tâm)', gender: 'female', generation: 1, orderInFamily: 1, birthDate: '18/08/1914', deathDate: 'mùng 8 tháng 9 Âm lịch (1990)', isAlive: false, spouseId: 'phan-thanh', phone: '0903112234', address: 'Điện Bàn, Quảng Nam', notes: 'Cụ Bà Chính Thất (Hiệu Từ Tâm)' },
+    { id: 'tran-dang-thich', treeId: 'tree-phan-family', fullName: 'Trần Đăng Thích', nickname: 'Trưởng nhánh Chi 2', gender: 'male', generation: 2, orderInFamily: 2, birthDate: '15/06/1942', deathDate: '09 tháng 10 Âm lịch (2015)', isAlive: false, fatherId: 'phan-thanh', motherId: 'tran-thi-hoang', spouseId: 'le-thi-lan', phone: '0912345602', address: 'Hương Thủy, Thừa Thiên Huế', notes: 'Trưởng nhánh Chi 2' },
+    { id: 'le-thi-lan', treeId: 'tree-phan-family', fullName: 'Lê Thị Lan', nickname: 'Dâu hiền Chi 2', gender: 'female', generation: 2, orderInFamily: 2, birthDate: '12/09/1945', isAlive: true, spouseId: 'tran-dang-thich', phone: '0912345678', address: 'Chi 2 - Chi Giáp, Đà Nẵng', notes: 'Dâu hiền Chi 2' },
+    { id: 'tran-thi-anh-tuyet', treeId: 'tree-phan-family', fullName: 'Trần Thị Ánh Tuyết', nickname: 'Cô Ba', gender: 'female', generation: 2, orderInFamily: 3, birthDate: '18/10/1948', isAlive: true, fatherId: 'phan-thanh', motherId: 'tran-thi-hoang', phone: '0912345603', address: 'Chi 3 - Chi Nữ Phái, TP.HCM', notes: 'Cô Ba' },
+    { id: 'tran-thi-my', treeId: 'tree-phan-family', fullName: 'Trần Thị Mỹ', nickname: 'Dâu Chi 1', gender: 'female', generation: 2, orderInFamily: 1, birthDate: '05/04/1960', isAlive: true, phone: '0912345604', address: 'Chi 1 - Trưởng Chi, Hà Nội', notes: 'Dâu Chi 1' },
+    { id: 'phan-van-thu-1', treeId: 'tree-phan-family', fullName: 'Phan Văn Thứ 1', nickname: 'Bác Cả', gender: 'male', generation: 2, orderInFamily: 1, birthDate: '05/02/1935', deathDate: '15/07/2010', isAlive: false, fatherId: 'phan-thanh', motherId: 'tran-thi-hoang', phone: '0912345601', address: 'Chi 1 - Trưởng Chi, Quảng Nam', notes: 'Trưởng nam đời 2 tộc Phan, nguyên chi trưởng.' },
+    { id: 'phan-van-thu-4', treeId: 'tree-phan-family', fullName: 'Phan Văn Thứ 4', nickname: 'Chú Tư', gender: 'male', generation: 2, orderInFamily: 4, birthDate: '22/09/1943', isAlive: true, fatherId: 'phan-thanh', motherId: 'tran-thi-hoang', phone: '0912345605', address: 'Quảng Nam', notes: 'Chú Tư' },
+
+    // Tran Members
+    { id: 'tran-dang-thich-tran', treeId: 'tree-tran-family', fullName: 'Trần Đăng Thích', nickname: 'Cụ Khởi Nhánh Huế', gender: 'male', generation: 1, orderInFamily: 1, birthDate: '15/06/1942', deathDate: '09 tháng 10 Âm lịch (2015)', isAlive: false, spouseId: 'le-thi-lan-tran', phone: '0912345602', address: 'Hương Thủy, Thừa Thiên Huế', notes: 'Khởi lập nhánh gia phả Tộc Trần (Huế)' },
+    { id: 'le-thi-lan-tran', treeId: 'tree-tran-family', fullName: 'Lê Thị Lan', nickname: 'Bà Chính Thất', gender: 'female', generation: 1, orderInFamily: 1, birthDate: '12/09/1945', isAlive: true, spouseId: 'tran-dang-thich-tran', phone: '0912345678', address: 'Đà Nẵng & Huế', notes: 'Hiền thê Cụ Trần Đăng Thích' },
+    { id: 'tran-dang-khoa-tran', treeId: 'tree-tran-family', fullName: 'Trần Đăng Khoa', nickname: 'Trưởng nam đời 2', gender: 'male', generation: 2, orderInFamily: 1, birthDate: '10/05/1972', isAlive: true, fatherId: 'tran-dang-thich-tran', motherId: 'le-thi-lan-tran', phone: '0905123456', address: 'TP. Huế', notes: 'Trưởng nam đời thứ hai nhánh Tộc Trần' },
+    { id: 'tran-thi-mai-tran', treeId: 'tree-tran-family', fullName: 'Trần Thị Ngọc Mai', nickname: 'Ái nữ đời 2', gender: 'female', generation: 2, orderInFamily: 2, birthDate: '18/11/1976', isAlive: true, fatherId: 'tran-dang-thich-tran', motherId: 'le-thi-lan-tran', phone: '0905987654', address: 'Đà Nẵng', notes: 'Con gái thứ hai' },
+
+    // Le Members
+    { id: 'le-van-khoi-le', treeId: 'tree-le-family', fullName: 'Lê Văn Khởi', nickname: 'Cụ Khởi Tổ Tộc Lê', gender: 'male', generation: 1, orderInFamily: 1, birthDate: '08/03/1915', deathDate: '20/12/1992', isAlive: false, spouseId: 'nguyen-thi-mai-le', phone: '0903889901', address: 'Nga Sơn, Thanh Hóa', notes: 'Cụ Khởi Tổ chi nhánh Tộc Lê phát tích Thanh Hóa' },
+    { id: 'nguyen-thi-mai-le', treeId: 'tree-le-family', fullName: 'Nguyễn Thị Mai', nickname: 'Cụ Bà Chính Thất', gender: 'female', generation: 1, orderInFamily: 1, birthDate: '14/07/1919', deathDate: '11/04/1998', isAlive: false, spouseId: 'le-van-khoi-le', phone: '0903889902', address: 'Nga Sơn, Thanh Hóa', notes: 'Cụ Bà Chính Thất Tộc Lê' },
+    { id: 'le-van-thanh-le', treeId: 'tree-le-family', fullName: 'Lê Văn Thành', nickname: 'Trưởng Chi 1', gender: 'male', generation: 2, orderInFamily: 1, birthDate: '25/08/1945', isAlive: true, fatherId: 'le-van-khoi-le', motherId: 'nguyen-thi-mai-le', phone: '0913556677', address: 'Thanh Hóa & Hà Nội', notes: 'Trưởng chi nhánh đời 2' },
+    { id: 'le-thi-hoa-le', treeId: 'tree-le-family', fullName: 'Lê Thị Hoa', nickname: 'Cô Hai', gender: 'female', generation: 2, orderInFamily: 2, birthDate: '02/10/1950', isAlive: true, fatherId: 'le-van-khoi-le', motherId: 'nguyen-thi-mai-le', phone: '0913998877', address: 'Hà Nội', notes: 'Con gái thứ đời 2' },
+  ];
+
+  // Phase 1: Tạo lý lịch cá nhân, gán quan hệ phụ thuộc = null
+  for (const m of allMembers) {
+    const { fatherId, motherId, spouseId, ...base } = m;
+    await prisma.treeMember.upsert({
+      where: { id: m.id },
+      create: { ...base, fatherId: null, motherId: null, spouseId: null },
+      update: { ...base, fatherId: null, motherId: null, spouseId: null },
+    });
+  }
+
+  // Phase 2: Ghép nối quan hệ
+  for (const m of allMembers) {
+    const data = {};
+    if (m.fatherId) {
+      const f = await prisma.treeMember.findUnique({ where: { id: m.fatherId } });
+      if (f && f.treeId === m.treeId) data.fatherId = m.fatherId;
+    }
+    if (m.motherId) {
+      const mo = await prisma.treeMember.findUnique({ where: { id: m.motherId } });
+      if (mo && mo.treeId === m.treeId) data.motherId = m.motherId;
+    }
+    if (m.spouseId) {
+      const s = await prisma.treeMember.findUnique({ where: { id: m.spouseId } });
+      if (s && s.treeId === m.treeId) data.spouseId = m.spouseId;
+    }
+    if (Object.keys(data).length > 0) {
+      await prisma.treeMember.update({ where: { id: m.id }, data });
+    }
+  }
+
+  console.log('✓ Đã khởi tạo thành công 3 Cây Gia Phả & 16 Thành viên mẫu (Tộc Phan, Tộc Trần, Tộc Lê)');
 }
 
 main()

@@ -17,7 +17,7 @@ if (process.env.VERCEL) {
 
     for (const src of candidates) {
       if (fs.existsSync(src)) {
-        if (!fs.existsSync(tmpDbPath)) {
+        if (!fs.existsSync(tmpDbPath) || fs.statSync(tmpDbPath).size === 0) {
           fs.copyFileSync(src, tmpDbPath);
         }
         break;

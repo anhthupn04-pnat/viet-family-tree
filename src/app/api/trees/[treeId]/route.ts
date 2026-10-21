@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSuperAdmin, requireTreePermission, ensureTreeManagerAccess, getAuthUserFromRequest } from "@/lib/rbac";
+import { ensureDefaultTreeAndMembers } from "@/lib/treeSeed";
 
 export const dynamic = "force-dynamic";
 
@@ -99,9 +100,15 @@ export async function PUT(
     const body = await request.json();
     const { name, originLocation, description, status, isPublic, shareSlug, accessPassword } = body;
 
-    const existing = await prisma.tree.findUnique({
+    let existing = await prisma.tree.findUnique({
       where: { id: treeId },
     });
+
+    if (!existing) {
+      if (treeId === "tree-phan-family" || treeId === "tree-tran-family" || treeId === "tree-le-family") {
+        existing = await ensureDefaultTreeAndMembers(treeId);
+      }
+    }
 
     if (!existing) {
       return NextResponse.json(

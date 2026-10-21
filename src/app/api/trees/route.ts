@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSuperAdmin, getAuthUserFromRequest } from "@/lib/rbac";
+import { ensureDefaultTreeAndMembers } from "@/lib/treeSeed";
 
 export const dynamic = "force-dynamic";
 
@@ -47,29 +48,28 @@ export async function GET(request: Request) {
       orderBy: { createdAt: "desc" },
     });
 
-    // Nếu chưa có cây nào trong database, tự động seed Cây gốc Tộc Phan để hệ thống luôn có dữ liệu
+    // Nếu chưa có cây nào trong database, tự động seed các cây mẫu và thành viên để hệ thống luôn sẵn sàng
     if (trees.length === 0) {
-      const defaultTree = await prisma.tree.create({
-        data: {
-          id: "tree-phan-family",
-          name: "Gia Phả Tộc Phan (Quảng Nam)",
-          slug: "gia-pha-toc-phan",
-          shareSlug: "gia-pha-toc-phan",
-          originLocation: "Điện Bàn, Quảng Nam",
-          description: "Cây gia phả chính thống của dòng tộc Phan Thạnh",
-          status: "ACTIVE",
-          creatorId: "admin-super",
-          isPublic: true,
-        },
-      });
+      await ensureDefaultTreeAndMembers("tree-phan-family");
+      await ensureDefaultTreeAndMembers("tree-tran-family");
+      await ensureDefaultTreeAndMembers("tree-le-family");
 
-      trees = [
-        {
-          ...defaultTree,
-          _count: { members: 0 },
-          userRoles: [],
-        } as any,
-      ];
+      trees = await prisma.tree.findMany({
+        where: whereClause,
+        include: {
+          _count: {
+            select: { members: true },
+          },
+          userRoles: {
+            include: {
+              user: {
+                select: { id: true, name: true, email: true },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
     }
 
     const formatted = trees.map((t) => ({

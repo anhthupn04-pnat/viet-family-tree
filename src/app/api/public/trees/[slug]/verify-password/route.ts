@@ -31,6 +31,9 @@ export async function POST(
           { shareSlug: cleanSlug },
           { slug: cleanSlug },
           { id: cleanSlug },
+          ...(cleanSlug === "gia-pha-toc-phan" ? [{ id: "tree-phan-family" }] : []),
+          ...(cleanSlug === "gia-pha-toc-tran-hue" ? [{ id: "tree-tran-family" }] : []),
+          ...(cleanSlug === "gia-pha-toc-le-thanh-hoa" ? [{ id: "tree-le-family" }] : []),
         ],
       },
       select: {

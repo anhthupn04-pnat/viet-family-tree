@@ -362,9 +362,11 @@ export const DEFAULT_TREES: Tree[] = [
     description: "Nhánh gia phả bên ngoại Tộc Trần",
     status: "ACTIVE",
     creatorId: "admin-super",
+    isPublic: true,
+    shareSlug: "gia-pha-toc-tran-hue",
     createdAt: "2026-02-15",
     updatedAt: "2026-10-21",
-    memberCount: 0,
+    memberCount: 4,
   },
   {
     id: "tree-le-family",
@@ -372,11 +374,13 @@ export const DEFAULT_TREES: Tree[] = [
     slug: "gia-pha-toc-le-thanh-hoa",
     originLocation: "Nga Sơn, Thanh Hóa",
     description: "Cây phả hệ Tộc Lê phát tích miền Bắc",
-    status: "CLOSED",
+    status: "ACTIVE",
     creatorId: "admin-super",
+    isPublic: true,
+    shareSlug: "gia-pha-toc-le-thanh-hoa",
     createdAt: "2026-03-10",
     updatedAt: "2026-10-21",
-    memberCount: 0,
+    memberCount: 4,
   },
 ];
 
