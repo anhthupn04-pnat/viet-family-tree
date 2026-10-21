@@ -299,6 +299,43 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
       await navigator.clipboard.writeText(fullUrl);
       setShareCopied(true);
       setTimeout(() => setShareCopied(false), 2000);
+
+      // Đồng bộ ngầm dữ liệu thành viên để đảm bảo link người nhận mở có đủ dữ liệu
+      let membersToSync: any[] = [];
+      if (activeTreeId === sharingTree.id && Array.isArray(members) && members.length > 0) {
+        membersToSync = members;
+      } else {
+        const keysToTry = [
+          `tree_members_${sharingTree.id}`,
+          sharingTree.id === "tree-phan-family" ? "phan_family_members_v3" : null,
+          sharingTree.id === "tree-phan-family" ? "viet_family_tree_members_v2" : null,
+        ].filter(Boolean) as string[];
+        for (const key of keysToTry) {
+          const stored = localStorage.getItem(key);
+          if (stored) {
+            try {
+              const parsed = JSON.parse(stored);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                membersToSync = parsed;
+                break;
+              }
+            } catch (e) {}
+          }
+        }
+      }
+      if (membersToSync.length > 0) {
+        fetch(`/api/trees/${sharingTree.id}/import`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-user-email": currentAdmin?.email || "anhthuphan0102@gmail.com",
+          },
+          body: JSON.stringify({
+            members: membersToSync,
+            upsertMode: "overwrite",
+          }),
+        }).catch(() => {});
+      }
     } catch {
       setShareCopied(false);
     }
@@ -323,12 +360,20 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
           membersToSync = members;
         } else {
           try {
-            const key = sharingTree.id === "tree-phan-family" ? "viet_family_tree_members_v2" : `tree_members_${sharingTree.id}`;
-            const stored = localStorage.getItem(key);
-            if (stored) {
-              const parsed = JSON.parse(stored);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                membersToSync = parsed;
+            const keysToTry = [
+              `tree_members_${sharingTree.id}`,
+              sharingTree.id === "tree-phan-family" ? "phan_family_members_v3" : null,
+              sharingTree.id === "tree-phan-family" ? "viet_family_tree_members_v2" : null,
+            ].filter(Boolean) as string[];
+
+            for (const key of keysToTry) {
+              const stored = localStorage.getItem(key);
+              if (stored) {
+                const parsed = JSON.parse(stored);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  membersToSync = parsed;
+                  break;
+                }
               }
             }
           } catch (e) {}

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-// 1. DỮ LIỆU THÀNH VIÊN GỐC TỘC PHAN (QUẢNG NAM) - ĐẦY ĐỦ 3 ĐỜI (15 THÀNH VIÊN)
+// 1. DỮ LIỆU THÀNH VIÊN GỐC CHÍNH THỐNG TỘC PHAN (QUẢNG NAM) - 15 THÀNH VIÊN CHUẨN CỦA HỆ THỐNG
 export const DEFAULT_ROOT_MEMBERS = [
   // Đời 1: Cụ Ông & Cụ Bà
   {
@@ -16,7 +16,7 @@ export const DEFAULT_ROOT_MEMBERS = [
     isAlive: false,
     spouseId: "tran-thi-hoang",
     phone: "0903112233",
-    address: "Điện Bàn, Quảng Nam",
+    address: "Giỗ: 16 tháng 3 Âm lịch",
     notes: "Cụ Khởi Tổ (Hiệu Phúc Thiện)",
   },
   {
@@ -32,7 +32,7 @@ export const DEFAULT_ROOT_MEMBERS = [
     isAlive: false,
     spouseId: "phan-thanh",
     phone: "0903112234",
-    address: "Điện Bàn, Quảng Nam",
+    address: "Giỗ: mùng 8 tháng 9 Âm lịch",
     notes: "Cụ Bà Chính Thất (Hiệu Từ Tâm)",
   },
   // Đời 2: Các nhánh con & dâu rể
@@ -84,7 +84,7 @@ export const DEFAULT_ROOT_MEMBERS = [
     motherId: "tran-thi-hoang",
     spouseId: "le-thi-lan",
     phone: "0912345602",
-    address: "Hương Thủy, Thừa Thiên Huế",
+    address: "Giỗ: 09 tháng 10 Âm lịch",
     notes: "Trưởng nhánh Chi 2",
   },
   {
@@ -132,7 +132,7 @@ export const DEFAULT_ROOT_MEMBERS = [
     motherId: "tran-thi-hoang",
     phone: "0912345605",
     address: "Điện Bàn, Quảng Nam",
-    notes: "Con thứ 4 tộc Phan.",
+    notes: "Con thứ 4 tộc Phan, giáo viên hưu trí.",
   },
   {
     id: "phan-van-thu-5",
@@ -249,141 +249,6 @@ export const DEFAULT_ROOT_MEMBERS = [
   },
 ];
 
-// 2. DỮ LIỆU THÀNH VIÊN TỘC TRẦN (HUẾ) - 4 THÀNH VIÊN
-export const DEFAULT_TRAN_MEMBERS = [
-  {
-    id: "tran-dang-thich-tran",
-    treeId: "tree-tran-family",
-    fullName: "Trần Đăng Thích",
-    nickname: "Cụ Khởi Nhánh Huế",
-    gender: "male",
-    generation: 1,
-    orderInFamily: 1,
-    birthDate: "15/06/1942",
-    deathDate: "09 tháng 10 Âm lịch (2015)",
-    isAlive: false,
-    spouseId: "le-thi-lan-tran",
-    phone: "0912345602",
-    address: "Hương Thủy, Thừa Thiên Huế",
-    notes: "Khởi lập nhánh gia phả Tộc Trần (Huế)",
-  },
-  {
-    id: "le-thi-lan-tran",
-    treeId: "tree-tran-family",
-    fullName: "Lê Thị Lan",
-    nickname: "Bà Chính Thất",
-    gender: "female",
-    generation: 1,
-    orderInFamily: 1,
-    birthDate: "12/09/1945",
-    isAlive: true,
-    spouseId: "tran-dang-thich-tran",
-    phone: "0912345678",
-    address: "Đà Nẵng & Huế",
-    notes: "Hiền thê Cụ Trần Đăng Thích",
-  },
-  {
-    id: "tran-dang-khoa-tran",
-    treeId: "tree-tran-family",
-    fullName: "Trần Đăng Khoa",
-    nickname: "Trưởng nam đời 2",
-    gender: "male",
-    generation: 2,
-    orderInFamily: 1,
-    birthDate: "10/05/1972",
-    isAlive: true,
-    fatherId: "tran-dang-thich-tran",
-    motherId: "le-thi-lan-tran",
-    phone: "0905123456",
-    address: "TP. Huế",
-    notes: "Trưởng nam đời thứ hai nhánh Tộc Trần",
-  },
-  {
-    id: "tran-thi-mai-tran",
-    treeId: "tree-tran-family",
-    fullName: "Trần Thị Ngọc Mai",
-    nickname: "Ái nữ đời 2",
-    gender: "female",
-    generation: 2,
-    orderInFamily: 2,
-    birthDate: "18/11/1976",
-    isAlive: true,
-    fatherId: "tran-dang-thich-tran",
-    motherId: "le-thi-lan-tran",
-    phone: "0905987654",
-    address: "Đà Nẵng",
-    notes: "Con gái thứ hai",
-  },
-];
-
-// 3. DỮ LIỆU THÀNH VIÊN TỘC LÊ (THANH HÓA) - 4 THÀNH VIÊN
-export const DEFAULT_LE_MEMBERS = [
-  {
-    id: "le-van-khoi-le",
-    treeId: "tree-le-family",
-    fullName: "Lê Văn Khởi",
-    nickname: "Cụ Khởi Tổ Tộc Lê",
-    gender: "male",
-    generation: 1,
-    orderInFamily: 1,
-    birthDate: "08/03/1915",
-    deathDate: "20/12/1992",
-    isAlive: false,
-    spouseId: "nguyen-thi-mai-le",
-    phone: "0903889901",
-    address: "Nga Sơn, Thanh Hóa",
-    notes: "Cụ Khởi Tổ chi nhánh Tộc Lê phát tích Thanh Hóa",
-  },
-  {
-    id: "nguyen-thi-mai-le",
-    treeId: "tree-le-family",
-    fullName: "Nguyễn Thị Mai",
-    nickname: "Cụ Bà Chính Thất",
-    gender: "female",
-    generation: 1,
-    orderInFamily: 1,
-    birthDate: "14/07/1919",
-    deathDate: "11/04/1998",
-    isAlive: false,
-    spouseId: "le-van-khoi-le",
-    phone: "0903889902",
-    address: "Nga Sơn, Thanh Hóa",
-    notes: "Cụ Bà Chính Thất Tộc Lê",
-  },
-  {
-    id: "le-van-thanh-le",
-    treeId: "tree-le-family",
-    fullName: "Lê Văn Thành",
-    nickname: "Trưởng Chi 1",
-    gender: "male",
-    generation: 2,
-    orderInFamily: 1,
-    birthDate: "25/08/1945",
-    isAlive: true,
-    fatherId: "le-van-khoi-le",
-    motherId: "nguyen-thi-mai-le",
-    phone: "0913556677",
-    address: "Thanh Hóa & Hà Nội",
-    notes: "Trưởng chi nhánh đời 2",
-  },
-  {
-    id: "le-thi-hoa-le",
-    treeId: "tree-le-family",
-    fullName: "Lê Thị Hoa",
-    nickname: "Cô Hai",
-    gender: "female",
-    generation: 2,
-    orderInFamily: 2,
-    birthDate: "02/10/1950",
-    isAlive: true,
-    fatherId: "le-van-khoi-le",
-    motherId: "nguyen-thi-mai-le",
-    phone: "0913998877",
-    address: "Hà Nội",
-    notes: "Con gái thứ đời 2",
-  },
-];
-
 /**
  * Chuyển đổi slug thành tên hiển thị tiếng Việt đẹp mắt
  */
@@ -471,7 +336,9 @@ export async function seedMembersForTree(treeId: string, membersData: any[]) {
 }
 
 /**
- * Đảm bảo cả 3 cây gia phả mặc định và thành viên đều sẵn sàng trong database
+ * Đảm bảo các cây gia phả mặc định tồn tại trong database
+ * LƯU Ý: KHÔNG BỊA RA THÀNH VIÊN GIẢ MẠO CHO BẤT KỲ CÂY NÀO.
+ * Chỉ có Tộc Phan là có 15 thành viên gốc chuẩn ban đầu của hệ thống.
  */
 export async function ensureDefaultTreeAndMembers(targetTreeId: string = "tree-phan-family") {
   try {
@@ -501,7 +368,7 @@ export async function ensureDefaultTreeAndMembers(targetTreeId: string = "tree-p
       await seedMembersForTree("tree-phan-family", DEFAULT_ROOT_MEMBERS);
     }
 
-    // 2. CÂY TỘC TRẦN (HUẾ)
+    // 2. CÂY TỘC TRẦN (HUẾ) - KHÔNG BỊA THÀNH VIÊN
     const treeTran = await prisma.tree.upsert({
       where: { id: "tree-tran-family" },
       create: {
@@ -523,11 +390,8 @@ export async function ensureDefaultTreeAndMembers(targetTreeId: string = "tree-p
       },
       include: { members: true },
     });
-    if (treeTran.members.length === 0) {
-      await seedMembersForTree("tree-tran-family", DEFAULT_TRAN_MEMBERS);
-    }
 
-    // 3. CÂY TỘC LÊ (THANH HÓA)
+    // 3. CÂY TỘC LÊ (THANH HÓA) - KHÔNG BỊA THÀNH VIÊN
     const treeLe = await prisma.tree.upsert({
       where: { id: "tree-le-family" },
       create: {
@@ -549,9 +413,6 @@ export async function ensureDefaultTreeAndMembers(targetTreeId: string = "tree-p
       },
       include: { members: true },
     });
-    if (treeLe.members.length === 0) {
-      await seedMembersForTree("tree-le-family", DEFAULT_LE_MEMBERS);
-    }
 
     if (targetTreeId === "tree-tran-family") return treeTran;
     if (targetTreeId === "tree-le-family") return treeLe;

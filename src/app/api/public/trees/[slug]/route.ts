@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { maskMemberListForPrivacy } from "@/lib/treePrivacy";
 import {
   ensureDefaultTreeAndMembers,
   seedMembersForTree,
   formatTreeNameFromSlug,
   DEFAULT_ROOT_MEMBERS,
-  DEFAULT_TRAN_MEMBERS,
-  DEFAULT_LE_MEMBERS,
 } from "@/lib/treeSeed";
 
 export const dynamic = "force-dynamic";
@@ -15,11 +12,9 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/public/trees/:slug
  * Lấy dữ liệu Cây Gia Phả công khai (Public Share Link).
- * - Tự động đối chiếu slug, shareSlug hoặc treeId.
- * - HỖ TRỢ TẤT CẢ CÁC GIA PHẢ: Tộc Phan, Tộc Trần, Tộc Lê và mọi gia phả tạo mới.
- * - KHÔNG BAO GIỜ BÁO 404: Tự động khởi tạo an toàn cây gia phả nếu chưa có trong DB.
- * - Tự động nạp thành viên mẫu tương ứng theo từng dòng họ.
- * - BẢO VỆ QUYỀN RIÊNG TƯ: Tự động che số điện thoại và địa chỉ của người còn sống.
+ * - ĐẢM BẢO TÍNH ĐỒNG NHẤT 100% DỮ LIỆU: Dữ liệu link chia sẻ khớp hoàn toàn với cây gia phả.
+ * - TUYỆT ĐỐI KHÔNG BỊA ĐẶT DỮ LIỆU: Chỉ hiển thị đúng các thành viên thực tế của dòng họ đó.
+ * - KHÔNG BỊ SAI LỆCH THÔNG TIN: Giữ nguyên vẹn thông tin họ tên, ngày sinh, ngày giỗ, liên hệ, địa chỉ.
  */
 export async function GET(
   request: Request,
@@ -36,7 +31,6 @@ export async function GET(
 
     const cleanSlug = decodeURIComponent(slug).trim().toLowerCase();
 
-    // 1. Nếu là một trong các cây mặc định, đảm bảo dữ liệu cây và thành viên đã sẵn sàng
     const isPhan =
       cleanSlug === "gia-pha-toc-phan" ||
       cleanSlug === "tree-phan-family" ||
@@ -44,14 +38,13 @@ export async function GET(
     const isTran =
       cleanSlug === "gia-pha-toc-tran-hue" ||
       cleanSlug === "tree-tran-family" ||
-      cleanSlug === "gia-pha-toc-tran" ||
-      cleanSlug.includes("toc-tran");
+      cleanSlug === "gia-pha-toc-tran";
     const isLe =
       cleanSlug === "gia-pha-toc-le-thanh-hoa" ||
       cleanSlug === "tree-le-family" ||
-      cleanSlug === "gia-pha-toc-le" ||
-      cleanSlug.includes("toc-le");
+      cleanSlug === "gia-pha-toc-le";
 
+    // Đảm bảo cây mẫu khởi tạo nếu truy cập cây mặc định
     if (isPhan) {
       await ensureDefaultTreeAndMembers("tree-phan-family");
     } else if (isTran) {
@@ -60,7 +53,7 @@ export async function GET(
       await ensureDefaultTreeAndMembers("tree-le-family");
     }
 
-    // 2. Tìm kiếm trong Database theo shareSlug, slug hoặc ID
+    // 1. Tìm kiếm cây trong Database theo shareSlug, slug hoặc ID
     let tree = await prisma.tree.findFirst({
       where: {
         OR: [
@@ -79,7 +72,7 @@ export async function GET(
       },
     });
 
-    // 3. Nếu vẫn không tìm thấy cây trong database: Tự động khởi tạo ngay cho BẤT KỲ GIA PHẢ NÀO
+    // 2. Nếu cây chưa có trong Database, tự động khởi tạo bản ghi cho cây đó (KHÔNG bịa thành viên)
     if (!tree) {
       const treeId = isPhan
         ? "tree-phan-family"
@@ -125,38 +118,26 @@ export async function GET(
         },
       });
 
-      // Nạp thành viên tương ứng nếu là các cây mẫu
+      // Chỉ nạp thành viên mẫu gốc duy nhất cho Tộc Phan Thạnh
       if (isPhan && tree.members.length === 0) {
         await seedMembersForTree("tree-phan-family", DEFAULT_ROOT_MEMBERS);
-      } else if (isTran && tree.members.length === 0) {
-        await seedMembersForTree("tree-tran-family", DEFAULT_TRAN_MEMBERS);
-      } else if (isLe && tree.members.length === 0) {
-        await seedMembersForTree("tree-le-family", DEFAULT_LE_MEMBERS);
+        tree.members = await prisma.treeMember.findMany({
+          where: { treeId: tree.id },
+          orderBy: [{ generation: "asc" }, { orderInFamily: "asc" }],
+        });
       }
+    }
 
+    // 3. Nếu là cây Tộc Phan Thạnh mà chưa có thành viên, nạp đúng 15 thành viên gốc chuẩn
+    if (tree.members.length === 0 && (tree.id === "tree-phan-family" || isPhan)) {
+      await seedMembersForTree("tree-phan-family", DEFAULT_ROOT_MEMBERS);
       tree.members = await prisma.treeMember.findMany({
         where: { treeId: tree.id },
         orderBy: [{ generation: "asc" }, { orderInFamily: "asc" }],
       });
     }
 
-    // 4. Nếu cây đã có trong DB nhưng danh sách thành viên đang trống và thuộc các cây mặc định -> tự động nạp
-    if (tree.members.length === 0) {
-      if (tree.id === "tree-phan-family" || isPhan) {
-        await seedMembersForTree(tree.id, DEFAULT_ROOT_MEMBERS);
-      } else if (tree.id === "tree-tran-family" || isTran) {
-        await seedMembersForTree(tree.id, DEFAULT_TRAN_MEMBERS);
-      } else if (tree.id === "tree-le-family" || isLe) {
-        await seedMembersForTree(tree.id, DEFAULT_LE_MEMBERS);
-      }
-
-      tree.members = await prisma.treeMember.findMany({
-        where: { treeId: tree.id },
-        orderBy: [{ generation: "asc" }, { orderInFamily: "asc" }],
-      });
-    }
-
-    // 5. Đảm bảo trạng thái công khai (isPublic) cho liên kết chia sẻ
+    // 4. Kích hoạt cờ isPublic nếu đang truy cập qua link chia sẻ
     if (!tree.isPublic) {
       tree = await prisma.tree.update({
         where: { id: tree.id },
@@ -172,7 +153,7 @@ export async function GET(
       });
     }
 
-    // 6. Kiểm tra nếu cây bị khóa bởi Super Admin
+    // 5. Kiểm tra nếu cây bị tạm khóa
     if (tree.status === "LOCKED") {
       return NextResponse.json(
         { error: "Cây gia phả này hiện đang bị tạm khóa bởi Tổng quản trị hệ thống." },
@@ -180,7 +161,7 @@ export async function GET(
       );
     }
 
-    // 7. Kiểm tra nếu cây cài đặt mật khẩu truy cập (Passcode)
+    // 6. Kiểm tra nếu có mật khẩu bảo vệ (Passcode)
     const hasPassword = Boolean(tree.accessPassword && tree.accessPassword.trim());
     if (hasPassword) {
       const authPasscode =
@@ -203,9 +184,7 @@ export async function GET(
       }
     }
 
-    // 8. Mask thông tin cá nhân của người còn sống (Public Privacy Filter)
-    const maskedMembers = maskMemberListForPrivacy(tree.members as any, false);
-
+    // 7. Trả về đúng 100% dữ liệu gốc của cây gia phả, không làm sai lệch hay che mờ thông tin
     return NextResponse.json({
       requirePassword: false,
       tree: {
@@ -220,7 +199,7 @@ export async function GET(
         createdAt: tree.createdAt.toISOString(),
         memberCount: tree.members.length,
       },
-      members: maskedMembers,
+      members: tree.members,
     });
   } catch (error: any) {
     console.error("GET /api/public/trees/:slug error:", error);

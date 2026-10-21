@@ -366,7 +366,7 @@ export const DEFAULT_TREES: Tree[] = [
     shareSlug: "gia-pha-toc-tran-hue",
     createdAt: "2026-02-15",
     updatedAt: "2026-10-21",
-    memberCount: 4,
+    memberCount: 0,
   },
   {
     id: "tree-le-family",
@@ -380,7 +380,7 @@ export const DEFAULT_TREES: Tree[] = [
     shareSlug: "gia-pha-toc-le-thanh-hoa",
     createdAt: "2026-03-10",
     updatedAt: "2026-10-21",
-    memberCount: 4,
+    memberCount: 0,
   },
 ];
 
@@ -802,17 +802,35 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
       }
       try {
         const jsonStr = JSON.stringify(updated);
-        localStorage.setItem(STORAGE_MEMBERS, jsonStr);
-        localStorage.setItem(STORAGE_MEMBERS_LEGACY, jsonStr);
+        if (activeTreeId === "tree-phan-family") {
+          localStorage.setItem(STORAGE_MEMBERS, jsonStr);
+          localStorage.setItem(STORAGE_MEMBERS_LEGACY, jsonStr);
+        }
+        localStorage.setItem(`tree_members_${activeTreeId}`, jsonStr);
       } catch (e) {
         console.error(e);
       }
       return updated;
     });
 
+    // Cập nhật số lượng thành viên của cây
+    setTrees((prev) =>
+      prev.map((t) => (t.id === activeTreeId ? { ...t, memberCount: (t.memberCount || 0) + 1 } : t))
+    );
+
+    // Tự động đồng bộ lên Database Server
+    fetch(`/api/trees/${activeTreeId}/members`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-user-email": currentAdmin?.email || "anhthuphan0102@gmail.com",
+      },
+      body: JSON.stringify(newMember),
+    }).catch((err) => console.warn("Lỗi sync addMember:", err));
+
     setRefreshTrigger((prev) => prev + 1);
     return newMember;
-  }, []);
+  }, [activeTreeId, currentAdmin]);
 
   // Admin Direct: Update Member
   const updateMemberDirect = useCallback((id: string, updates: Partial<Member>) => {
@@ -842,16 +860,29 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
 
       try {
         const jsonStr = JSON.stringify(updated);
-        localStorage.setItem(STORAGE_MEMBERS, jsonStr);
-        localStorage.setItem(STORAGE_MEMBERS_LEGACY, jsonStr);
+        if (activeTreeId === "tree-phan-family") {
+          localStorage.setItem(STORAGE_MEMBERS, jsonStr);
+          localStorage.setItem(STORAGE_MEMBERS_LEGACY, jsonStr);
+        }
+        localStorage.setItem(`tree_members_${activeTreeId}`, jsonStr);
       } catch (e) {
         console.error(e);
       }
       return updated;
     });
 
+    // Tự động đồng bộ lên Database Server
+    fetch(`/api/trees/${activeTreeId}/members/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "x-user-email": currentAdmin?.email || "anhthuphan0102@gmail.com",
+      },
+      body: JSON.stringify(updates),
+    }).catch((err) => console.warn("Lỗi sync updateMember:", err));
+
     setRefreshTrigger((prev) => prev + 1);
-  }, []);
+  }, [activeTreeId, currentAdmin]);
 
   // Admin Direct: Delete Member
   const deleteMemberDirect = useCallback((id: string) => {
@@ -867,16 +898,31 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
 
       try {
         const jsonStr = JSON.stringify(updated);
-        localStorage.setItem(STORAGE_MEMBERS, jsonStr);
-        localStorage.setItem(STORAGE_MEMBERS_LEGACY, jsonStr);
+        if (activeTreeId === "tree-phan-family") {
+          localStorage.setItem(STORAGE_MEMBERS, jsonStr);
+          localStorage.setItem(STORAGE_MEMBERS_LEGACY, jsonStr);
+        }
+        localStorage.setItem(`tree_members_${activeTreeId}`, jsonStr);
       } catch (e) {
         console.error(e);
       }
       return updated;
     });
 
+    setTrees((prev) =>
+      prev.map((t) => (t.id === activeTreeId ? { ...t, memberCount: Math.max(0, (t.memberCount || 1) - 1) } : t))
+    );
+
+    // Tự động đồng bộ xóa trên Database Server
+    fetch(`/api/trees/${activeTreeId}/members/${id}`, {
+      method: "DELETE",
+      headers: {
+        "x-user-email": currentAdmin?.email || "anhthuphan0102@gmail.com",
+      },
+    }).catch((err) => console.warn("Lỗi sync deleteMember:", err));
+
     setRefreshTrigger((prev) => prev + 1);
-  }, []);
+  }, [activeTreeId, currentAdmin]);
 
   // Admin Direct: Add Event
   const addEventDirect = useCallback((eventData: Omit<EventItem, "id"> & { id?: string }): EventItem => {
@@ -1167,16 +1213,22 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
         console.error(e);
       }
 
-      // Cập nhật số lượng thành viên của cây hiện tại
-      setTrees((prev) =>
-        prev.map((t) =>
-          t.id === activeTreeId ? { ...t, memberCount: importedMembers.length } : t
-        )
-      );
+      // Tự động đồng bộ lên Database Server qua Import API
+      fetch(`/api/trees/${activeTreeId}/import`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-email": currentAdmin?.email || "anhthuphan0102@gmail.com",
+        },
+        body: JSON.stringify({
+          members: importedMembers,
+          upsertMode: "overwrite",
+        }),
+      }).catch((err) => console.warn("Lỗi sync bulkImport:", err));
 
       setRefreshTrigger((prev) => prev + 1);
     },
-    [activeTreeId]
+    [activeTreeId, currentAdmin]
   );
 
   return (
