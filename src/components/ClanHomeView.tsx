@@ -27,7 +27,6 @@ import { useFamilyStore } from "@/lib/family-store";
 interface ClanHomeViewProps {
   onSelectTab: (tab: string) => void;
   onOpenLogin: () => void;
-  onOpenDigitalLibrary?: () => void;
 }
 
 /**
@@ -46,7 +45,6 @@ function extractSurname(name: string): string {
 export default function ClanHomeView({
   onSelectTab,
   onOpenLogin,
-  onOpenDigitalLibrary,
 }: ClanHomeViewProps) {
   const {
     trees,
@@ -166,17 +164,6 @@ export default function ClanHomeView({
                 <Users className="w-4 h-4 text-blue-400" />
                 <span>Danh Sách Nhân Khẩu</span>
               </button>
-
-              {onOpenDigitalLibrary && (
-                <button
-                  type="button"
-                  onClick={onOpenDigitalLibrary}
-                  className="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold text-xs sm:text-sm border border-slate-700 flex items-center gap-2 cursor-pointer transition-all active:scale-95"
-                >
-                  <BookOpen className="w-4 h-4 text-emerald-400" />
-                  <span>Tủ Sách Số Gia Tộc</span>
-                </button>
-              )}
 
               {!isAdmin && (
                 <button
@@ -441,21 +428,19 @@ export default function ClanHomeView({
             </p>
           </div>
 
-          {/* Tiện ích 3: Tủ sách số dòng họ */}
+          {/* Tiện ích 3: Sơ đồ phả hệ */}
           <div
-            onClick={() => {
-              if (onOpenDigitalLibrary) onOpenDigitalLibrary();
-            }}
+            onClick={() => onSelectTab("tree")}
             className="bg-white rounded-2xl p-5 border border-slate-200 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group"
           >
             <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
-              <BookOpen className="w-5 h-5" />
+              <Sparkles className="w-5 h-5" />
             </div>
             <h3 className="font-bold text-slate-900 text-sm group-hover:text-blue-600 transition-colors">
-              Tủ Sách Số & Văn Hóa Dòng Tộc
+              Sơ Đồ Cây Phả Hệ Trực Quan
             </h3>
             <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              Lưu trữ tư liệu, văn bia, gia huấn, hình ảnh nhà thờ họ và truyền thống ngàn năm của dòng tộc.
+              Khám phá phả đồ huyết thống tương tác nhiều thế hệ, phân bố chi phái khoa học và trực quan.
             </p>
           </div>
         </div>

@@ -36,7 +36,6 @@ import {
   AlertCircle,
   Copy,
   Info,
-  Landmark,
   Home,
 } from "lucide-react";
 import { Member, Tree, SuggestionType } from "@/types/family";
@@ -47,7 +46,6 @@ import MemberDetailDrawer from "@/components/MemberDetailDrawer";
 import KinshipCalculatorModal from "@/components/KinshipCalculatorModal";
 import CrowdsourceModal from "@/components/CrowdsourceModal";
 import AnniversariesModal from "@/components/AnniversariesModal";
-import DigitalLibraryModal from "@/components/DigitalLibraryModal";
 import { FamilyStoreProvider } from "@/lib/family-store";
 
 const nodeTypes = {
@@ -86,7 +84,6 @@ function PublicShareTreeContent() {
   // Modals
   const [showKinshipModal, setShowKinshipModal] = useState(false);
   const [showAnniversariesModal, setShowAnniversariesModal] = useState(false);
-  const [showDigitalLibraryModal, setShowDigitalLibraryModal] = useState(false);
   const [showCrowdsourceModal, setShowCrowdsourceModal] = useState(false);
   const [crowdsourceTarget, setCrowdsourceTarget] = useState<Member | null>(null);
   const [crowdsourceType, setCrowdsourceType] = useState<SuggestionType>("ADD_CHILD");
@@ -390,15 +387,6 @@ function PublicShareTreeContent() {
 
           <button
             type="button"
-            onClick={() => setShowDigitalLibraryModal(true)}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold rounded-xl border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
-          >
-            <Landmark className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">Thư Viện Số</span>
-          </button>
-
-          <button
-            type="button"
             onClick={() => setShowKinshipModal(true)}
             className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold rounded-xl border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
           >
@@ -576,13 +564,6 @@ function PublicShareTreeContent() {
         isOpen={showAnniversariesModal}
         onClose={() => setShowAnniversariesModal(false)}
         isAdmin={false}
-      />
-
-      {/* Modal Thư Viện Số Dòng Tộc */}
-      <DigitalLibraryModal
-        isOpen={showDigitalLibraryModal}
-        onClose={() => setShowDigitalLibraryModal(false)}
-        tree={tree}
       />
 
       {/* Modal Đóng Góp Phả Hệ */}

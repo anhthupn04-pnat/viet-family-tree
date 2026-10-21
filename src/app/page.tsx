@@ -13,7 +13,6 @@ import QuickImportModal from "@/components/QuickImportModal";
 import AnniversariesView from "@/components/AnniversariesView";
 import LotusFooter from "@/components/LotusFooter";
 import ClanHomeView from "@/components/ClanHomeView";
-import DigitalLibraryModal from "@/components/DigitalLibraryModal";
 import { Member } from "@/types/family";
 import { FamilyStoreProvider, useFamilyStore } from "@/lib/family-store";
 import { CheckCircle2, X, Compass, Sparkles } from "lucide-react";
@@ -43,7 +42,6 @@ function HomePageContent() {
   // Other Modals
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showKinshipModal, setShowKinshipModal] = useState(false);
-  const [showDigitalLibraryModal, setShowDigitalLibraryModal] = useState(false);
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -121,7 +119,6 @@ function HomePageContent() {
           <ClanHomeView
             onSelectTab={setActiveTab}
             onOpenLogin={() => setShowLoginModal(true)}
-            onOpenDigitalLibrary={() => setShowDigitalLibraryModal(true)}
           />
         )}
 
@@ -269,13 +266,6 @@ function HomePageContent() {
         isOpen={showKinshipModal}
         onClose={() => setShowKinshipModal(false)}
         preselectedAId={selectedMember?.id}
-      />
-
-      {/* 6. Digital Heritage Library Modal */}
-      <DigitalLibraryModal
-        isOpen={showDigitalLibraryModal}
-        onClose={() => setShowDigitalLibraryModal(false)}
-        tree={activeTree}
       />
     </div>
   );
