@@ -50,10 +50,12 @@ export async function GET(request: Request) {
           id: "tree-phan-family",
           name: "Gia Phả Tộc Phan (Quảng Nam)",
           slug: "gia-pha-toc-phan",
+          shareSlug: "gia-pha-toc-phan",
           originLocation: "Điện Bàn, Quảng Nam",
           description: "Cây gia phả chính thống của dòng tộc Phan Thạnh",
           status: "ACTIVE",
           creatorId: "admin-super",
+          isPublic: true,
         },
       });
 
