@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   ShieldCheck,
   CheckCircle2,
@@ -32,6 +32,11 @@ import {
   Square,
   Settings,
   Shield,
+  Share2,
+  Copy,
+  ExternalLink,
+  Check,
+  X,
 } from "lucide-react";
 import { PendingSubmission, AdminUser, Tree } from "@/types/family";
 import { useFamilyStore } from "@/lib/family-store";
@@ -99,6 +104,23 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
   // Role Assignment modal state
   const [assigningUser, setAssigningUser] = useState<AdminUser | null>(null);
   const [selectedTreesForUser, setSelectedTreesForUser] = useState<string[]>([]);
+
+  // Public Share Modal state
+  const [sharingTree, setSharingTree] = useState<Tree | null>(null);
+  const [shareIsPublic, setShareIsPublic] = useState(false);
+  const [shareSlug, setShareSlug] = useState("");
+  const [sharePassword, setSharePassword] = useState("");
+  const [shareCopied, setShareCopied] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareMsg, setShareMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Crowdsourced Suggestions state
+  const [queueSource, setQueueSource] = useState<"crowdsource" | "system">("crowdsource");
+  const [remoteSuggestions, setRemoteSuggestions] = useState<any[]>([]);
+  const [remoteLoading, setRemoteLoading] = useState(false);
+  const [remoteFilter, setRemoteFilter] = useState<"PENDING" | "APPROVED" | "REJECTED" | "ALL">("PENDING");
+  const [rejectingRemoteId, setRejectingRemoteId] = useState<string | null>(null);
+  const [rejectRemoteReason, setRejectRemoteReason] = useState("");
 
   // Statistics calculation
   const totalMembers = members.length;
@@ -251,6 +273,132 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
     setRejectReason("");
   };
 
+  const openShareModal = (t: Tree) => {
+    setSharingTree(t);
+    setShareIsPublic(t.isPublic ?? false);
+    setShareSlug(t.shareSlug || t.slug || t.id);
+    setSharePassword(t.accessPassword || "");
+    setShareCopied(false);
+    setShareMsg(null);
+  };
+
+  const handleCopyShareLink = async () => {
+    if (!sharingTree) return;
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const slugToUse = shareSlug.trim() || sharingTree.shareSlug || sharingTree.slug || sharingTree.id;
+    const fullUrl = `${origin}/share/${slugToUse}`;
+    try {
+      await navigator.clipboard.writeText(fullUrl);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch {
+      setShareCopied(false);
+    }
+  };
+
+  const handleSaveShareSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sharingTree) return;
+    setShareLoading(true);
+    setShareMsg(null);
+    try {
+      await updateTree(sharingTree.id, {
+        isPublic: shareIsPublic,
+        shareSlug: shareSlug.trim() || undefined,
+        accessPassword: sharePassword.trim() || undefined,
+      });
+      setShareMsg({ type: "success", text: "Đã lưu cấu hình chia sẻ công khai thành công!" });
+      setTimeout(() => {
+        setSharingTree(null);
+        setShareMsg(null);
+      }, 1200);
+    } catch (err: any) {
+      setShareMsg({ type: "error", text: err.message || "Lỗi khi lưu cấu hình chia sẻ" });
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const fetchRemoteSuggestions = useCallback(async () => {
+    setRemoteLoading(true);
+    try {
+      const res = await fetch(`/api/trees/${activeTreeId}/suggestions`, {
+        headers: {
+          "x-user-email": currentAdmin?.email || "anhthuphan0102@gmail.com",
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRemoteSuggestions(data.suggestions || []);
+      }
+    } catch (e) {
+      console.warn("Fetch suggestions error:", e);
+    } finally {
+      setRemoteLoading(false);
+    }
+  }, [activeTreeId, currentAdmin]);
+
+  useEffect(() => {
+    if (activeTab === "queue") {
+      fetchRemoteSuggestions();
+    }
+  }, [activeTab, fetchRemoteSuggestions]);
+
+  const handleApproveRemoteSuggestion = async (id: string) => {
+    try {
+      const res = await fetch(`/api/trees/${activeTreeId}/suggestions/${id}/approve`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-email": currentAdmin?.email || "anhthuphan0102@gmail.com",
+        },
+        body: JSON.stringify({ action: "approve" }),
+      });
+      if (res.ok) {
+        setRemoteSuggestions((prev) =>
+          prev.map((s) => (s.id === id ? { ...s, status: "APPROVED" } : s))
+        );
+        setActiveTreeId(activeTreeId);
+      } else {
+        const errData = await res.json();
+        alert(errData.error || "Lỗi khi phê duyệt đề xuất.");
+      }
+    } catch (e: any) {
+      alert("Lỗi kết nối: " + e.message);
+    }
+  };
+
+  const handleRejectRemoteSuggestion = async (id: string) => {
+    if (!rejectRemoteReason.trim()) {
+      alert("Vui lòng nhập lý do từ chối để phản hồi.");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/trees/${activeTreeId}/suggestions/${id}/approve`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-email": currentAdmin?.email || "anhthuphan0102@gmail.com",
+        },
+        body: JSON.stringify({ action: "reject", reviewNote: rejectRemoteReason.trim() }),
+      });
+      if (res.ok) {
+        setRemoteSuggestions((prev) =>
+          prev.map((s) =>
+            s.id === id ? { ...s, status: "REJECTED", reviewNote: rejectRemoteReason.trim() } : s
+          )
+        );
+        setRejectingRemoteId(null);
+        setRejectRemoteReason("");
+      } else {
+        const errData = await res.json();
+        alert(errData.error || "Lỗi khi từ chối đề xuất.");
+      }
+    } catch (e: any) {
+      alert("Lỗi kết nối: " + e.message);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Banner / Navigation */}
@@ -331,6 +479,302 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
       {/* TAB 1: HÀNG ĐỢI XÉT DUYỆT (APPROVAL QUEUE) */}
       {activeTab === "queue" && (
         <div className="space-y-4">
+          {/* Sub-tab Selector */}
+          <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl w-fit">
+            <button
+              type="button"
+              onClick={() => setQueueSource("crowdsource")}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                queueSource === "crowdsource"
+                  ? "bg-white text-blue-700 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5 text-blue-600" />
+              <span>
+                Đề xuất từ liên kết công khai (
+                {remoteSuggestions.filter((s) => s.status === "PENDING").length} chờ duyệt)
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setQueueSource("system")}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                queueSource === "system"
+                  ? "bg-white text-blue-700 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5 text-slate-500" />
+              <span>Yêu cầu nội bộ ({pendingCount})</span>
+            </button>
+          </div>
+
+          {queueSource === "crowdsource" ? (
+            <div className="space-y-4">
+              {/* Filter Bar */}
+              <div className="flex items-center justify-between flex-wrap gap-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-semibold text-slate-500 mr-2">Trạng thái:</span>
+                  <button
+                    type="button"
+                    onClick={() => setRemoteFilter("PENDING")}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      remoteFilter === "PENDING"
+                        ? "bg-blue-600 text-white shadow-xs"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Chờ duyệt ({remoteSuggestions.filter((s) => s.status === "PENDING").length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRemoteFilter("APPROVED")}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      remoteFilter === "APPROVED"
+                        ? "bg-emerald-600 text-white shadow-xs"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Đã chấp thuận ({remoteSuggestions.filter((s) => s.status === "APPROVED").length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRemoteFilter("REJECTED")}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      remoteFilter === "REJECTED"
+                        ? "bg-rose-600 text-white shadow-xs"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Đã từ chối ({remoteSuggestions.filter((s) => s.status === "REJECTED").length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRemoteFilter("ALL")}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      remoteFilter === "ALL"
+                        ? "bg-slate-800 text-white shadow-xs"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Tất cả ({remoteSuggestions.length})
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={fetchRemoteSuggestions}
+                  disabled={remoteLoading}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-semibold cursor-pointer"
+                >
+                  {remoteLoading ? "Đang tải..." : "Làm mới danh sách"}
+                </button>
+              </div>
+
+              {/* Suggestions List */}
+              {remoteSuggestions.filter((s) => remoteFilter === "ALL" || s.status === remoteFilter).length === 0 ? (
+                <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-500">
+                  <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
+                  <h3 className="font-bold text-slate-800 text-base">
+                    Không có đề xuất công khai nào trong mục này
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Bà con dòng họ đóng góp thông tin qua liên kết công khai sẽ được hiển thị tại đây để Ban Trị Sự duyệt.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {remoteSuggestions
+                    .filter((s) => remoteFilter === "ALL" || s.status === remoteFilter)
+                    .map((item) => {
+                      const isPending = item.status === "PENDING";
+                      const isApproved = item.status === "APPROVED";
+                      const isRejected = item.status === "REJECTED";
+                      const targetMember = item.targetMemberId ? getMember(item.targetMemberId) : null;
+                      const pData = item.proposedData || {};
+
+                      const typeLabel =
+                        item.suggestionType === "EDIT_INFO"
+                          ? "Chỉnh sửa thông tin"
+                          : item.suggestionType === "ADD_CHILD"
+                          ? "Thêm con/cháu mới"
+                          : "Báo sai sót";
+
+                      const typeColor =
+                        item.suggestionType === "EDIT_INFO"
+                          ? "bg-amber-100 text-amber-800 border-amber-200"
+                          : item.suggestionType === "ADD_CHILD"
+                          ? "bg-blue-100 text-blue-800 border-blue-200"
+                          : "bg-rose-100 text-rose-800 border-rose-200";
+
+                      return (
+                        <div
+                          key={item.id}
+                          className={`bg-white rounded-2xl border p-5 shadow-xs transition-all ${
+                            isPending
+                              ? "border-amber-300 ring-2 ring-amber-400/20"
+                              : isApproved
+                              ? "border-emerald-200 bg-emerald-50/20"
+                              : "border-slate-200 opacity-80"
+                          }`}
+                        >
+                          {/* Item Header */}
+                          <div className="flex items-start justify-between gap-3 flex-wrap border-b border-slate-100 pb-3 mb-3">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${typeColor}`}>
+                                {typeLabel}
+                              </span>
+                              <span className="text-xs font-bold text-slate-900">
+                                Người gửi: {item.senderName}
+                              </span>
+                              {item.senderPhone && (
+                                <span className="text-xs text-slate-500 font-mono flex items-center gap-1">
+                                  <Phone className="w-3 h-3 text-slate-400" />
+                                  <span>{item.senderPhone}</span>
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                <span>{new Date(item.createdAt).toLocaleString("vi-VN")}</span>
+                              </span>
+                              <span
+                                className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase ${
+                                  isPending
+                                    ? "bg-amber-100 text-amber-800"
+                                    : isApproved
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : "bg-rose-100 text-rose-800"
+                                }`}
+                              >
+                                {isPending ? "Chờ duyệt" : isApproved ? "Đã chấp thuận" : "Đã từ chối"}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Target Member reference if any */}
+                          {targetMember && (
+                            <div className="mb-3 p-2 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-700 flex items-center gap-2">
+                              <Users className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                              <span>
+                                Áp dụng cho: <strong>{targetMember.fullName}</strong> (Đời {targetMember.generation} - {targetMember.nickname || "Chưa có hiệu"})
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Proposed Data Details */}
+                          <div className="p-3.5 bg-emerald-50/50 border border-emerald-200 rounded-xl space-y-1.5 text-xs text-slate-700">
+                            <span className="font-bold text-emerald-800 text-[11px] uppercase tracking-wider block border-b border-emerald-200 pb-1">
+                              Dữ liệu đề xuất
+                            </span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                              {pData.fullName && (
+                                <p>Họ tên: <strong className="text-emerald-900">{pData.fullName}</strong></p>
+                              )}
+                              {pData.gender && (
+                                <p>Giới tính: <strong>{pData.gender === "female" ? "Nữ" : "Nam"}</strong></p>
+                              )}
+                              {pData.birthDate && (
+                                <p>Ngày/Năm sinh: <strong>{pData.birthDate}</strong></p>
+                              )}
+                              {pData.deathDate && (
+                                <p>Ngày giỗ/mất: <strong>{pData.deathDate}</strong></p>
+                              )}
+                              {pData.phone && (
+                                <p>SĐT: <strong className="font-mono">{pData.phone}</strong></p>
+                              )}
+                              {pData.address && (
+                                <p>Nơi cư trú: <strong>{pData.address}</strong></p>
+                              )}
+                              {pData.senderRelation && (
+                                <p>Quan hệ: <strong>{pData.senderRelation}</strong></p>
+                              )}
+                            </div>
+                            {pData.notes && (
+                              <p className="pt-1 text-slate-600 border-t border-emerald-100 mt-2">
+                                Ghi chú: <em>&quot;{pData.notes}&quot;</em>
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Rejection Note */}
+                          {isRejected && item.reviewNote && (
+                            <div className="mt-2.5 p-2.5 bg-rose-100/70 border border-rose-300 rounded-lg text-xs text-rose-900">
+                              <strong>Lý do từ chối:</strong> {item.reviewNote}
+                            </div>
+                          )}
+
+                          {/* Approval Attribution */}
+                          {isApproved && item.reviewedBy && (
+                            <div className="mt-2.5 p-2 bg-emerald-100/60 border border-emerald-300 rounded-lg text-[11px] text-emerald-900 flex items-center gap-1.5 font-medium">
+                              <BadgeCheck className="w-3.5 h-3.5 text-emerald-700" />
+                              <span>Đã duyệt và hợp nhất tự động vào phả hệ bởi: <strong>{item.reviewedBy}</strong></span>
+                            </div>
+                          )}
+
+                          {/* Action Buttons for Pending */}
+                          {isPending && (
+                            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                              {rejectingRemoteId === item.id ? (
+                                <div className="flex items-center gap-2 w-full sm:w-auto">
+                                  <input
+                                    type="text"
+                                    placeholder="Nhập lý do từ chối..."
+                                    value={rejectRemoteReason}
+                                    onChange={(e) => setRejectRemoteReason(e.target.value)}
+                                    className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRejectRemoteSuggestion(item.id)}
+                                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-xs cursor-pointer"
+                                  >
+                                    Xác nhận từ chối
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setRejectingRemoteId(null);
+                                      setRejectRemoteReason("");
+                                    }}
+                                    className="px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-600 hover:bg-slate-100 cursor-pointer"
+                                  >
+                                    Hủy
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => setRejectingRemoteId(item.id)}
+                                    className="px-3.5 py-1.5 border border-rose-300 text-rose-700 hover:bg-rose-50 rounded-xl text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5"
+                                  >
+                                    <XCircle className="w-3.5 h-3.5" />
+                                    <span>Từ chối</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApproveRemoteSuggestion(item.id)}
+                                    className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-colors flex items-center gap-1.5"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>Chấp thuận & Hợp nhất (1-Click)</span>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
           {/* Filter Bar */}
           <div className="flex items-center justify-between flex-wrap gap-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
             <div className="flex items-center gap-1.5">
@@ -686,6 +1130,8 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
               })}
             </div>
           )}
+            </div>
+          )}
         </div>
       )}
 
@@ -853,12 +1299,31 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
                       : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs"
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusColors}`}
-                    >
-                      {statusLabel}
-                    </span>
+                  <div className="flex items-start justify-between gap-2 mb-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusColors}`}
+                      >
+                        {statusLabel}
+                      </span>
+                      {t.isPublic ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                          <Globe className="w-3 h-3 text-emerald-600" />
+                          <span>Công khai</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-1">
+                          <Lock className="w-3 h-3 text-slate-500" />
+                          <span>Riêng tư</span>
+                        </span>
+                      )}
+                      {(t.accessPassword || t.hasPassword) && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-0.5" title="Có cài passcode truy cập">
+                          <KeyRound className="w-2.5 h-2.5 text-amber-600" />
+                          <span>Passcode</span>
+                        </span>
+                      )}
+                    </div>
                     {isActive && (
                       <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-blue-600 text-white shadow-xs">
                         Đang kích hoạt
@@ -900,6 +1365,15 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
                       className="flex-1 py-1.5 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold cursor-pointer text-center transition-colors"
                     >
                       Xem Phả Hệ
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => openShareModal(t)}
+                      className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border border-blue-200 rounded-lg cursor-pointer transition-colors"
+                      title="Cấu hình chia sẻ liên kết công khai"
+                    >
+                      <Share2 className="w-4 h-4" />
                     </button>
 
                     <button
@@ -1500,6 +1974,187 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
                 >
                   <UserPlus className="w-3.5 h-3.5" />
                   <span>Tạo Tài Khoản</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: CẤU HÌNH CHIA SẺ LIÊN KẾT CÔNG KHAI */}
+      {sharingTree && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden">
+            <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Share2 className="w-5 h-5 text-blue-400" />
+                <div>
+                  <h3 className="font-bold text-sm">Chia Sẻ Liên Kết Công Khai</h3>
+                  <p className="text-[11px] text-slate-400 font-normal">
+                    {sharingTree.name}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSharingTree(null)}
+                className="text-white/80 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveShareSettings} className="p-5 space-y-4 text-xs">
+              {shareMsg && (
+                <div
+                  className={`p-2.5 rounded-lg border text-xs font-semibold ${
+                    shareMsg.type === "success"
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      : "bg-rose-50 text-rose-800 border-rose-200"
+                  }`}
+                >
+                  {shareMsg.text}
+                </div>
+              )}
+
+              {/* Toggle Public Access */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-3">
+                <div>
+                  <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                    <Globe className="w-4 h-4 text-blue-600" />
+                    <span>Chế độ xem công khai (Public Share)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Cho phép bà con dòng họ & khách vãng lai truy cập xem phả hệ qua đường link.
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={shareIsPublic}
+                    onChange={(e) => setShareIsPublic(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+
+              {/* Custom Slug */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Đường dẫn liên kết tĩnh (Share Slug / Alias)
+                </label>
+                <div className="flex items-center">
+                  <span className="px-3 py-2 bg-slate-100 border border-r-0 border-slate-300 rounded-l-lg text-slate-500 font-mono text-[11px]">
+                    /share/
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    placeholder="dong-ho-phan-quang-nam"
+                    value={shareSlug}
+                    onChange={(e) => setShareSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, "-"))}
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-r-lg font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Chỉ gồm chữ thường không dấu, số và dấu gạch nối (ví dụ: gia-pha-toc-phan).
+                </p>
+              </div>
+
+              {/* Password Protection */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-semibold text-slate-700">
+                    Mật khẩu bảo vệ (Passcode tùy chọn)
+                  </label>
+                  <span className="text-[10px] text-slate-400">Để trống nếu mở tự do không cần mật khẩu</span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Để trống nếu mở tự do..."
+                  value={sharePassword}
+                  onChange={(e) => setSharePassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-slate-800"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Nếu đặt mật khẩu, người xem qua link phải nhập đúng passcode này mới xem được cây.
+                </p>
+              </div>
+
+              {/* Shareable Link Display & Copy */}
+              <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-blue-900 text-[11px]">Liên kết công khai của cây:</span>
+                  <a
+                    href={`/share/${shareSlug.trim() || sharingTree.slug || sharingTree.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-700 hover:text-blue-900 flex items-center gap-1 font-semibold text-[11px]"
+                  >
+                    <span>Xem thử trang khách</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={
+                      typeof window !== "undefined"
+                        ? `${window.location.origin}/share/${shareSlug.trim() || sharingTree.slug || sharingTree.id}`
+                        : `/share/${shareSlug.trim() || sharingTree.slug || sharingTree.id}`
+                    }
+                    className="flex-1 px-3 py-1.5 bg-white border border-blue-200 rounded-lg font-mono text-[11px] text-slate-700 select-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCopyShareLink}
+                    className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 text-[11px] cursor-pointer transition-colors shadow-2xs ${
+                      shareCopied
+                        ? "bg-emerald-600 text-white"
+                        : "bg-blue-600 hover:bg-blue-700 text-white"
+                    }`}
+                  >
+                    {shareCopied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Đã sao chép!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Sao chép</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Privacy Notice */}
+              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-[11px] flex items-start gap-2">
+                <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Chính sách bảo vệ quyền riêng tư:</strong> Số điện thoại và địa chỉ cụ thể của các thành viên còn sống sẽ được hệ thống tự động làm mờ (Mask) để bảo vệ dữ liệu cá nhân.
+                </span>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setSharingTree(null)}
+                  className="px-3.5 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 font-medium cursor-pointer"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="submit"
+                  disabled={shareLoading}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>{shareLoading ? "Đang lưu..." : "Lưu Cấu Hình"}</span>
                 </button>
               </div>
             </form>

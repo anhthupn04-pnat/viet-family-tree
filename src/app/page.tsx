@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Header from "@/components/Header";
 import FamilyTreeCanvas from "@/components/FamilyTreeCanvas";
 import MemberListView from "@/components/MemberListView";
@@ -19,6 +19,14 @@ import { CheckCircle2, X, Compass, Sparkles } from "lucide-react";
 function HomePageContent() {
   const { members, isAdmin, activeTree, bulkImportMembers } = useFamilyStore();
   const [activeTab, setActiveTab] = useState<string>("tree");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get("tab");
+      if (tab) setActiveTab(tab);
+    }
+  }, []);
 
   // Selection & Focus
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);

@@ -1,6 +1,5 @@
 "use client";
-
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   X,
   User,
@@ -18,9 +17,14 @@ import {
   AlertCircle,
   Copy,
   Check,
+  UserPlus,
+  AlertTriangle,
+  Lock,
 } from "lucide-react";
-import { Member } from "@/types/family";
+import { Member, SuggestionType } from "@/types/family";
 import { useFamilyStore } from "@/lib/family-store";
+import { maskMemberForPrivacy } from "@/lib/treePrivacy";
+import CrowdsourceModal from "@/components/CrowdsourceModal";
 
 interface MemberDetailDrawerProps {
   member: Member | null;
@@ -39,15 +43,19 @@ export default function MemberDetailDrawer({
   onAddSpouse,
   onShowToast,
 }: MemberDetailDrawerProps) {
-  const { getMember, getChildren, getSpouse, deleteMemberDirect, submitChangeRequest, isAdmin } =
+  const { getMember, getChildren, getSpouse, deleteMemberDirect, submitChangeRequest, isAdmin, activeTreeId } =
     useFamilyStore();
 
-  // Delete proposal modal state (for non-admin users)
-  const [showDeleteProposalModal, setShowDeleteProposalModal] = useState(false);
-  const [deleteSubmitterName, setDeleteSubmitterName] = useState("");
-  const [deleteSubmitterPhone, setDeleteSubmitterPhone] = useState("");
-  const [deleteReason, setDeleteReason] = useState("");
+  // Crowdsourcing modal states for guests/viewers
+  const [showCrowdsourceModal, setShowCrowdsourceModal] = useState(false);
+  const [crowdsourceType, setCrowdsourceType] = useState<SuggestionType>("EDIT_INFO");
   const [copiedPhone, setCopiedPhone] = useState(false);
+
+  // Áp dụng Privacy Masking nếu là khách/Viewer
+  const displayMember = useMemo(() => {
+    if (!member) return null;
+    return maskMemberForPrivacy(member, isAdmin);
+  }, [member, isAdmin]);
 
   if (!member) return null;
 
@@ -64,6 +72,7 @@ export default function MemberDetailDrawer({
   };
 
   const handleDeleteClick = () => {
+    if (!member) return;
     if (isAdmin) {
       if (
         confirm(
@@ -74,40 +83,7 @@ export default function MemberDetailDrawer({
         onClose();
         onShowToast(`Đã xóa thành viên "${member.fullName}" thành công.`);
       }
-    } else {
-      // Guest: Open Delete Proposal Modal
-      setShowDeleteProposalModal(true);
     }
-  };
-
-  const handleSubmitDeleteProposal = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!deleteSubmitterName.trim() || !deleteSubmitterPhone.trim() || !deleteReason.trim()) {
-      alert("Vui lòng điền đầy đủ Họ tên, Số điện thoại và Lý do đề xuất xóa.");
-      return;
-    }
-
-    submitChangeRequest({
-      actionType: "DELETE",
-      targetMemberId: member.id,
-      submitterName: deleteSubmitterName.trim(),
-      submitterPhone: deleteSubmitterPhone.trim(),
-      data: {
-        memberId: member.id,
-        fullName: member.fullName,
-        generation: member.generation,
-        reason: deleteReason.trim(),
-      },
-    });
-
-    setShowDeleteProposalModal(false);
-    setDeleteSubmitterName("");
-    setDeleteSubmitterPhone("");
-    setDeleteReason("");
-    onClose();
-    onShowToast(
-      "Yêu cầu của bạn đã được gửi thành công và đang đợi Ban trị sự (Admin) kiểm duyệt trước khi áp dụng lên cây phả hệ."
-    );
   };
 
   return (
@@ -172,25 +148,27 @@ export default function MemberDetailDrawer({
               </div>
             </div>
 
-            {/* Quick Action Buttons */}
-            <div className="mt-4 pt-3 border-t border-white/20 flex items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={() => onAddSpouse(member)}
-                className="flex-1 py-1.5 px-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <Heart className="w-3.5 h-3.5" />
-                <span>+ Vợ/Chồng</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onAddChild(member)}
-                className="flex-1 py-1.5 px-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <Baby className="w-3.5 h-3.5" />
-                <span>+ Thêm Con</span>
-              </button>
-            </div>
+            {/* Quick Action Buttons (Admin only) */}
+            {isAdmin && (
+              <div className="mt-4 pt-3 border-t border-white/20 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => onAddSpouse(member)}
+                  className="flex-1 py-1.5 px-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Heart className="w-3.5 h-3.5" />
+                  <span>+ Vợ/Chồng</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onAddChild(member)}
+                  className="flex-1 py-1.5 px-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Baby className="w-3.5 h-3.5" />
+                  <span>+ Thêm Con</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Drawer Body - Hiển thị công khai toàn bộ chi tiết */}
@@ -202,24 +180,37 @@ export default function MemberDetailDrawer({
                 <span>Thông Tin Liên Hệ & Nơi Cư Trú</span>
               </h4>
               <div className="flex items-center justify-between py-1 border-b border-slate-200/60">
-                <span className="text-slate-500">Số điện thoại:</span>
-                {member.phone ? (
+                <span className="text-slate-500 flex items-center gap-1">
+                  <span>Số điện thoại:</span>
+                  {!isAdmin && member.isAlive && displayMember?.phone && (
+                    <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200" title="Đã làm mờ thông tin cá nhân của thành viên còn sống">
+                      Bảo vệ
+                    </span>
+                  )}
+                </span>
+                {displayMember?.phone ? (
                   <div className="flex items-center gap-1.5 font-mono font-semibold text-blue-700">
-                    <a href={`tel:${member.phone}`} className="hover:underline">
-                      {member.phone}
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyPhone(member.phone!)}
-                      className="text-slate-400 hover:text-slate-600 p-1"
-                      title="Sao chép SĐT"
-                    >
-                      {copiedPhone ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-600" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </button>
+                    {isAdmin ? (
+                      <a href={`tel:${displayMember.phone}`} className="hover:underline">
+                        {displayMember.phone}
+                      </a>
+                    ) : (
+                      <span>{displayMember.phone}</span>
+                    )}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => handleCopyPhone(displayMember.phone!)}
+                        className="text-slate-400 hover:text-slate-600 p-1"
+                        title="Sao chép SĐT"
+                      >
+                        {copiedPhone ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <span className="text-slate-400 italic">Chưa cập nhật SĐT</span>
@@ -228,10 +219,10 @@ export default function MemberDetailDrawer({
               <div className="flex items-start justify-between py-1">
                 <span className="text-slate-500 shrink-0 mr-2 flex items-center gap-1">
                   <MapPin className="w-3 h-3 text-rose-500" />
-                  <span>Địa chỉ:</span>
+                  <span>Địa chỉ / Nơi cư trú:</span>
                 </span>
                 <span className="text-right font-medium text-slate-800">
-                  {member.address || "Chưa cập nhật địa chỉ"}
+                  {displayMember?.address || "Chưa cập nhật địa chỉ"}
                 </span>
               </div>
             </div>
@@ -343,118 +334,73 @@ export default function MemberDetailDrawer({
             )}
           </div>
 
-          {/* Drawer Footer */}
+          {/* Drawer Footer Actions */}
           <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onEdit(member);
-              }}
-              className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-              <span>{isAdmin ? "Chỉnh Sửa Trực Tiếp" : "Đề Xuất Chỉnh Sửa"}</span>
-            </button>
+            {isAdmin ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onEdit(member);
+                  }}
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  <span>Chỉnh Sửa Trực Tiếp</span>
+                </button>
 
-            <button
-              type="button"
-              onClick={handleDeleteClick}
-              className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer border border-slate-200"
-              title={isAdmin ? "Xóa thành viên trực tiếp" : "Gửi yêu cầu đề xuất xóa thành viên"}
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteClick}
+                  className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer border border-slate-200"
+                  title="Xóa thành viên trực tiếp (Admin)"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              // Non-admin (Viewer / Member / Guest): Strict Read-Only with Crowdsourcing
+              <div className="flex items-center gap-2 w-full">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCrowdsourceType("EDIT_INFO");
+                    setShowCrowdsourceModal(true);
+                  }}
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  <span>Đề Xuất Chỉnh Sửa</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCrowdsourceType("ADD_CHILD");
+                    setShowCrowdsourceModal(true);
+                  }}
+                  className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  title="Đề xuất thêm con/cháu mới"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Thêm Con/Cháu</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Guest Delete Proposal Modal */}
-      {showDeleteProposalModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden">
-            <div className="px-5 py-4 bg-rose-600 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-white" />
-                <h3 className="font-bold text-sm">Đề Xuất Xóa Thành Viên</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowDeleteProposalModal(false)}
-                className="text-white/80 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitDeleteProposal} className="p-5 space-y-3 text-xs">
-              <div className="p-2.5 bg-rose-50 text-rose-800 rounded-lg border border-rose-200">
-                Bạn đang gửi đề xuất xóa thành viên:{" "}
-                <strong className="text-rose-900">{member.fullName}</strong> (Đời {member.generation}).
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Họ và tên người gửi đề xuất *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ví dụ: Phan Văn An"
-                  value={deleteSubmitterName}
-                  onChange={(e) => setDeleteSubmitterName(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Số điện thoại người gửi *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ví dụ: 0912345678"
-                  value={deleteSubmitterPhone}
-                  onChange={(e) => setDeleteSubmitterPhone(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Lý do đề xuất xóa *
-                </label>
-                <textarea
-                  rows={3}
-                  required
-                  placeholder="Trùng lặp hồ sơ, sai nhánh dòng họ..."
-                  value={deleteReason}
-                  onChange={(e) => setDeleteReason(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                ></textarea>
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteProposalModal(false)}
-                  className="px-3.5 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 font-medium cursor-pointer"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Gửi Đề Xuất Phê Duyệt</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Crowdsourcing Modal for Guests & Viewers */}
+      <CrowdsourceModal
+        isOpen={showCrowdsourceModal}
+        onClose={() => setShowCrowdsourceModal(false)}
+        targetMember={member}
+        treeId={activeTreeId || "tree-phan-family"}
+        defaultType={crowdsourceType}
+        onSuccessToast={onShowToast}
+      />
     </>
   );
 }

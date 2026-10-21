@@ -346,6 +346,8 @@ export const DEFAULT_TREES: Tree[] = [
     description: "Cây gia phả chính thống của dòng tộc Phan Thạnh",
     status: "ACTIVE",
     creatorId: "admin-super",
+    isPublic: true,
+    shareSlug: "gia-pha-toc-phan",
     createdAt: "2026-01-01",
     updatedAt: "2026-10-21",
     memberCount: ROOT_SEED_MEMBERS.length,

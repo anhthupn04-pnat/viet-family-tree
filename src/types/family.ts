@@ -54,10 +54,34 @@ export interface Tree {
   description?: string;
   status: 'ACTIVE' | 'CLOSED' | 'LOCKED';
   creatorId?: string;
+  isPublic?: boolean;
+  shareSlug?: string;
+  accessPassword?: string;
+  hasPassword?: boolean;
   createdAt: string;
   updatedAt: string;
   memberCount?: number;
+  managers?: any[];
 }
+
+export type SuggestionType = 'EDIT_INFO' | 'ADD_CHILD' | 'REPORT_ERROR';
+
+export interface MemberSuggestion {
+  id: string;
+  treeId: string;
+  targetMemberId?: string;
+  senderName: string;
+  senderPhone?: string;
+  suggestionType: SuggestionType;
+  proposedData: any;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reviewNote?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 
 export interface UserAccount {
   id: string;

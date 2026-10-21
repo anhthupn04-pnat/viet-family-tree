@@ -228,11 +228,15 @@ CREATE TABLE IF NOT EXISTS public.trees (
     description TEXT,
     status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'CLOSED', 'LOCKED')),
     creator_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+    is_public BOOLEAN NOT NULL DEFAULT FALSE,
+    share_slug TEXT UNIQUE,
+    access_password TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_trees_slug ON public.trees(slug);
+CREATE INDEX IF NOT EXISTS idx_trees_share_slug ON public.trees(share_slug);
 CREATE INDEX IF NOT EXISTS idx_trees_status ON public.trees(status);
 
 CREATE TABLE IF NOT EXISTS public.tree_members (
@@ -324,3 +328,44 @@ DROP POLICY IF EXISTS "SuperAdmin user roles manage" ON public.user_tree_roles;
 CREATE POLICY "SuperAdmin user roles manage" ON public.user_tree_roles FOR ALL USING (
     EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'SUPER_ADMIN')
 );
+
+-- =============================================================================
+-- 10. BẢNG MEMBER_SUGGESTIONS (HÀNG ĐỢI ĐỀ XUẤT THÔNG TIN / CROWDSOURCING)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS public.member_suggestions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tree_id UUID NOT NULL REFERENCES public.trees(id) ON DELETE CASCADE,
+    target_member_id TEXT,
+    sender_name TEXT NOT NULL,
+    sender_phone TEXT,
+    suggestion_type TEXT NOT NULL CHECK (suggestion_type IN ('EDIT_INFO', 'ADD_CHILD', 'REPORT_ERROR')),
+    proposed_data JSONB NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
+    review_note TEXT,
+    reviewed_by TEXT,
+    reviewed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_member_suggestions_tree ON public.member_suggestions(tree_id);
+CREATE INDEX IF NOT EXISTS idx_member_suggestions_status ON public.member_suggestions(status);
+
+ALTER TABLE public.member_suggestions ENABLE ROW LEVEL SECURITY;
+
+-- 1. Cho phép bất kỳ ai (kể cả khách vãng lai) gửi đề xuất
+DROP POLICY IF EXISTS "Public can submit suggestion" ON public.member_suggestions;
+CREATE POLICY "Public can submit suggestion" ON public.member_suggestions 
+    FOR INSERT WITH CHECK (true);
+
+-- 2. Quản lý đề xuất: Chỉ SuperAdmin hoặc TreeManager phụ trách tree_id
+DROP POLICY IF EXISTS "Managers view and review suggestions" ON public.member_suggestions;
+CREATE POLICY "Managers view and review suggestions" ON public.member_suggestions 
+    FOR ALL USING (
+        EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'SUPER_ADMIN') OR
+        EXISTS (
+            SELECT 1 FROM public.user_tree_roles 
+            WHERE user_id = auth.uid() AND tree_id = member_suggestions.tree_id AND role = 'TREE_MANAGER'
+        )
+    );
+

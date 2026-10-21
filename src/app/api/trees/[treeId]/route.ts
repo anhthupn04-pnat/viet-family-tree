@@ -45,6 +45,9 @@ export async function GET(
         description: tree.description,
         status: tree.status,
         creatorId: tree.creatorId,
+        isPublic: tree.isPublic,
+        shareSlug: tree.shareSlug,
+        hasPassword: Boolean(tree.accessPassword),
         createdAt: tree.createdAt.toISOString(),
         updatedAt: tree.updatedAt.toISOString(),
         memberCount: tree.members.length,
@@ -68,22 +71,22 @@ export async function GET(
 
 /**
  * PUT /api/trees/:treeId
- * Cập nhật thông tin cây gia phả (Đổi tên, Đóng/Mở, Khóa, Sửa mô tả).
- * BẢO MẬT: CHỈ SUPER_ADMIN MỚI CÓ QUYỀN THỰC HIỆN.
+ * Cập nhật thông tin cây gia phả (Đổi tên, Đóng/Mở, Sửa mô tả, Cấu hình chia sẻ công khai).
+ * BẢO MẬT: SUPER_ADMIN hoặc TREE_MANAGER phụ trách treeId.
  */
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ treeId: string }> }
 ) {
   try {
-    const authCheck = await requireSuperAdmin(request);
+    const { treeId } = await params;
+    const authCheck = await requireTreePermission(request, treeId, "TREE_MANAGER");
     if (authCheck instanceof NextResponse) {
       return authCheck;
     }
 
-    const { treeId } = await params;
     const body = await request.json();
-    const { name, originLocation, description, status } = body;
+    const { name, originLocation, description, status, isPublic, shareSlug, accessPassword } = body;
 
     const existing = await prisma.tree.findUnique({
       where: { id: treeId },
@@ -96,6 +99,20 @@ export async function PUT(
       );
     }
 
+    // Check shareSlug uniqueness if changed
+    if (shareSlug && shareSlug.trim() && shareSlug.trim() !== existing.shareSlug) {
+      const cleanShareSlug = shareSlug.trim().toLowerCase();
+      const conflict = await prisma.tree.findUnique({
+        where: { shareSlug: cleanShareSlug },
+      });
+      if (conflict && conflict.id !== treeId) {
+        return NextResponse.json(
+          { error: `Đường dẫn chia sẻ (slug) '${cleanShareSlug}' đã được sử dụng bởi một gia phả khác.` },
+          { status: 400 }
+        );
+      }
+    }
+
     const updated = await prisma.tree.update({
       where: { id: treeId },
       data: {
@@ -103,13 +120,20 @@ export async function PUT(
         originLocation: originLocation !== undefined ? originLocation?.trim() : undefined,
         description: description !== undefined ? description?.trim() : undefined,
         status: status !== undefined ? status : undefined,
+        isPublic: isPublic !== undefined ? Boolean(isPublic) : undefined,
+        shareSlug: shareSlug !== undefined ? (shareSlug ? shareSlug.trim().toLowerCase() : null) : undefined,
+        accessPassword: accessPassword !== undefined ? (accessPassword ? accessPassword.trim() : null) : undefined,
       },
     });
 
     return NextResponse.json({
       success: true,
-      message: `Đã cập nhật cây gia phả '${updated.name}' thành công!`,
-      tree: updated,
+      message: `Đã cập nhật cấu hình cây gia phả '${updated.name}' thành công!`,
+      tree: {
+        ...updated,
+        hasPassword: Boolean(updated.accessPassword),
+        accessPassword: undefined, // Không lộ mật khẩu trong response
+      },
     });
   } catch (error: any) {
     console.error("PUT /api/trees/:treeId error:", error);

@@ -25,6 +25,7 @@ interface KinshipCalculatorModalProps {
   onClose: () => void;
   preselectedAId?: string;
   preselectedBId?: string;
+  members?: any[];
 }
 
 export default function KinshipCalculatorModal({
@@ -32,6 +33,7 @@ export default function KinshipCalculatorModal({
   onClose,
   preselectedAId,
   preselectedBId,
+  members: passedMembers,
 }: KinshipCalculatorModalProps) {
   const [members, setMembers] = useState<MemberOption[]>([]);
   const [memberAId, setMemberAId] = useState<string>(preselectedAId || "");
@@ -41,6 +43,19 @@ export default function KinshipCalculatorModal({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (passedMembers && passedMembers.length > 0) {
+      const list = passedMembers.map((m: any) => ({
+        id: m.id,
+        fullName: m.fullName,
+        generation: m.generation,
+        gender: m.gender,
+        branchName: m.branch?.branchName || m.address,
+        birthSolar: m.birthDate || m.birthSolar,
+      }));
+      setMembers(list);
+      return;
+    }
+
     fetch("/api/members")
       .then((r) => r.json())
       .then((data) => {
@@ -57,7 +72,7 @@ export default function KinshipCalculatorModal({
         }
       })
       .catch(console.error);
-  }, []);
+  }, [passedMembers]);
 
   useEffect(() => {
     if (preselectedAId) setMemberAId(preselectedAId);
