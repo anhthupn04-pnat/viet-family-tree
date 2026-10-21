@@ -51,7 +51,7 @@ export default function MemberFormModal({
 
   const [fullName, setFullName] = useState("");
   const [nickname, setNickname] = useState("");
-  const [gender, setGender] = useState<"male" | "female">("male");
+  const [gender, setGender] = useState<"male" | "female" | "other">("male");
   const [generation, setGeneration] = useState(2);
   const [orderInFamily, setOrderInFamily] = useState<number | "">("");
   const [birthDate, setBirthDate] = useState("");

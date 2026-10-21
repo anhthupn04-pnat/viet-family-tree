@@ -215,3 +215,112 @@ CREATE POLICY "Allow upload family-tree-media" ON storage.objects
 DROP POLICY IF EXISTS "Allow manage family-tree-media" ON storage.objects;
 CREATE POLICY "Allow manage family-tree-media" ON storage.objects
     FOR ALL USING (bucket_id = 'family-tree-media');
+
+-- =============================================================================
+-- 9. HỆ THỐNG ĐA GIA PHẢ (MULTI-TREE) & PHÂN QUYỀN RBAC (POSTGRESQL / SUPABASE)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS public.trees (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    slug TEXT UNIQUE NOT NULL,
+    origin_location TEXT,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'CLOSED', 'LOCKED')),
+    creator_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_trees_slug ON public.trees(slug);
+CREATE INDEX IF NOT EXISTS idx_trees_status ON public.trees(status);
+
+CREATE TABLE IF NOT EXISTS public.tree_members (
+    id TEXT PRIMARY KEY, -- Cho phép ID dạng chuỗi (ví dụ: 'phan-thanh', 'tran-thi-hoang')
+    tree_id UUID NOT NULL REFERENCES public.trees(id) ON DELETE CASCADE,
+    full_name TEXT NOT NULL,
+    nickname TEXT,
+    gender TEXT NOT NULL DEFAULT 'male' CHECK (gender IN ('male', 'female', 'other')),
+    generation_level INTEGER NOT NULL DEFAULT 1,
+    order_in_family INTEGER,
+    birth_date TEXT,
+    death_date TEXT,
+    is_alive BOOLEAN NOT NULL DEFAULT TRUE,
+    avatar_url TEXT,
+    father_id TEXT REFERENCES public.tree_members(id) ON DELETE SET NULL,
+    mother_id TEXT REFERENCES public.tree_members(id) ON DELETE SET NULL,
+    spouse_id TEXT REFERENCES public.tree_members(id) ON DELETE SET NULL,
+    phone TEXT,
+    address TEXT,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tree_members_tree ON public.tree_members(tree_id);
+CREATE INDEX IF NOT EXISTS idx_tree_members_gen ON public.tree_members(generation_level);
+CREATE INDEX IF NOT EXISTS idx_tree_members_parents ON public.tree_members(father_id, mother_id);
+CREATE INDEX IF NOT EXISTS idx_tree_members_spouse ON public.tree_members(spouse_id);
+
+CREATE TABLE IF NOT EXISTS public.user_tree_roles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    tree_id UUID NOT NULL REFERENCES public.trees(id) ON DELETE CASCADE,
+    role TEXT NOT NULL DEFAULT 'TREE_MANAGER' CHECK (role IN ('TREE_MANAGER', 'VIEWER')),
+    assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_user_tree_role UNIQUE (user_id, tree_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_tree_roles_user ON public.user_tree_roles(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_tree_roles_tree ON public.user_tree_roles(tree_id);
+
+-- RLS for Multi-Tree & RBAC:
+ALTER TABLE public.trees ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tree_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_tree_roles ENABLE ROW LEVEL SECURITY;
+
+-- Policy Trees:
+-- 1. Xem cây: Bất kỳ ai cũng có thể xem cây ở trạng thái ACTIVE, hoặc user có role liên kết
+DROP POLICY IF EXISTS "Public trees read" ON public.trees;
+CREATE POLICY "Public trees read" ON public.trees FOR SELECT USING (
+    status = 'ACTIVE' OR
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'SUPER_ADMIN') OR
+    EXISTS (SELECT 1 FROM public.user_tree_roles WHERE user_id = auth.uid() AND tree_id = id)
+);
+
+-- 2. Quản lý cây (Tạo mới, sửa, xóa): Chỉ SUPER_ADMIN
+DROP POLICY IF EXISTS "SuperAdmin trees manage" ON public.trees;
+CREATE POLICY "SuperAdmin trees manage" ON public.trees FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'SUPER_ADMIN')
+);
+
+-- Policy Tree Members:
+-- 1. Xem thành viên: Ai xem được cây thì xem được thành viên
+DROP POLICY IF EXISTS "Tree members select" ON public.tree_members;
+CREATE POLICY "Tree members select" ON public.tree_members FOR SELECT USING (
+    EXISTS (
+        SELECT 1 FROM public.trees t 
+        WHERE t.id = tree_id AND (
+            t.status = 'ACTIVE' OR 
+            EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'SUPER_ADMIN') OR
+            EXISTS (SELECT 1 FROM public.user_tree_roles WHERE user_id = auth.uid() AND tree_id = t.id)
+        )
+    )
+);
+
+-- 2. Thay đổi thành viên (Thêm, Sửa, Xóa, Nhập Bulk): Chỉ SUPER_ADMIN hoặc TREE_MANAGER được phân quyền trên cây đó
+DROP POLICY IF EXISTS "Tree members manage" ON public.tree_members;
+CREATE POLICY "Tree members manage" ON public.tree_members FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'SUPER_ADMIN') OR
+    EXISTS (
+        SELECT 1 FROM public.user_tree_roles 
+        WHERE user_id = auth.uid() AND tree_id = tree_members.tree_id AND role = 'TREE_MANAGER'
+    )
+);
+
+-- Policy User Tree Roles:
+-- Chỉ SUPER_ADMIN mới được xem và phân quyền user_tree_roles
+DROP POLICY IF EXISTS "SuperAdmin user roles manage" ON public.user_tree_roles;
+CREATE POLICY "SuperAdmin user roles manage" ON public.user_tree_roles FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'SUPER_ADMIN')
+);

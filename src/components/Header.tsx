@@ -17,6 +17,9 @@ import {
   CheckCircle2,
   Sparkles,
   Bell,
+  ChevronDown,
+  FolderTree,
+  Upload,
 } from "lucide-react";
 import { Member } from "@/types/family";
 import { useFamilyStore } from "@/lib/family-store";
@@ -26,6 +29,7 @@ interface HeaderProps {
   setActiveTab: (tab: string) => void;
   onOpenLogin: () => void;
   onOpenAddMember: () => void;
+  onOpenQuickImport?: () => void;
   onFocusMember?: (memberId: string) => void;
 }
 
@@ -34,26 +38,40 @@ export default function Header({
   setActiveTab,
   onOpenLogin,
   onOpenAddMember,
+  onOpenQuickImport,
   onFocusMember,
 }: HeaderProps) {
   const {
     members,
     isAdmin,
+    isSuperAdmin,
     currentAdmin,
     logoutAdmin,
     pendingCount,
+    trees,
+    activeTreeId,
+    activeTree,
+    setActiveTreeId,
+    userRole,
+    canCreateTree,
+    canBulkImport,
   } = useFamilyStore();
 
   // Search autocomplete state
   const [searchTerm, setSearchTerm] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isTreeDropdownOpen, setIsTreeDropdownOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const treeDropdownRef = useRef<HTMLDivElement>(null);
 
   // Close search dropdown on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
         setIsSearchOpen(false);
+      }
+      if (treeDropdownRef.current && !treeDropdownRef.current.contains(e.target as Node)) {
+        setIsTreeDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -145,16 +163,22 @@ export default function Header({
               </button>
             )}
 
-            {/* Login / Admin User Badge */}
+            {/* Login / Admin User Badge & RBAC Role Display */}
             {isAdmin ? (
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5 bg-blue-950/80 text-blue-200 px-2.5 py-0.5 rounded-lg border border-blue-800 text-[11px]">
+                <div className="flex items-center gap-1.5 bg-slate-800 text-slate-200 px-2.5 py-0.5 rounded-lg border border-slate-700 text-[11px]">
                   <UserCheck className="w-3.5 h-3.5 text-blue-400" />
                   <span className="font-semibold text-white hidden md:inline">
                     {currentAdmin?.name}
                   </span>
-                  <span className="bg-blue-600 text-white font-bold text-[9px] px-1.5 rounded">
-                    {currentAdmin?.role === "super_admin" ? "SUPER ADMIN" : "ADMIN"}
+                  <span
+                    className={`font-bold text-[9px] px-1.5 py-0.5 rounded tracking-wide ${
+                      isSuperAdmin
+                        ? "bg-purple-600 text-white"
+                        : "bg-blue-600 text-white"
+                    }`}
+                  >
+                    {isSuperAdmin ? "SUPER ADMIN" : "TREE MANAGER"}
                   </span>
                 </div>
                 <button
@@ -168,41 +192,153 @@ export default function Header({
                 </button>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={onOpenLogin}
-                className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-[11px] font-bold shadow-xs transition-colors cursor-pointer"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Đăng nhập Admin</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-400 hidden sm:inline flex items-center gap-1">
+                  <Eye className="w-3 h-3 text-slate-400" />
+                  <span>Quyền: Thành Viên Xem (VIEWER)</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={onOpenLogin}
+                  className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-[11px] font-bold shadow-xs transition-colors cursor-pointer"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Đăng nhập Admin</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* 2. MAIN HEADER (Title, Search, Add Member Button) */}
+      {/* 2. MAIN HEADER (Title, Tree Switcher, Search, Quick Import, Add Member Button) */}
       <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
-        {/* Brand */}
-        <div
-          onClick={() => setActiveTab("tree")}
-          className="flex items-center gap-3 cursor-pointer group shrink-0"
-        >
-          <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-sm group-hover:bg-blue-700 transition-colors">
+        {/* Brand & Multi-Tree Switcher */}
+        <div className="flex items-center gap-3 shrink-0">
+          <div
+            onClick={() => setActiveTab("tree")}
+            className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-sm hover:bg-blue-700 transition-colors cursor-pointer"
+          >
             TP
           </div>
-          <div>
+
+          <div className="relative" ref={treeDropdownRef}>
             <div className="flex items-center gap-2">
-              <span className="text-lg font-bold text-slate-900 tracking-tight">
-                Phan Family Tree Hub
+              <span
+                onClick={() => setActiveTab("tree")}
+                className="text-base sm:text-lg font-bold text-slate-900 tracking-tight cursor-pointer hover:text-blue-600 transition-colors"
+              >
+                Gia Phả Số
               </span>
-              <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 font-semibold px-2 py-0.5 rounded-full">
-                Tộc Phan
-              </span>
+
+              {/* Tree Switcher Pill Button */}
+              <button
+                type="button"
+                onClick={() => setIsTreeDropdownOpen((prev) => !prev)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                title="Bấm để chuyển đổi cây gia phả"
+              >
+                <FolderTree className="w-3.5 h-3.5 text-blue-600" />
+                <span className="max-w-[140px] sm:max-w-[200px] truncate">
+                  {activeTree?.name || "Chọn Gia Phả"}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+              </button>
             </div>
-            <p className="text-xs text-slate-500">
-              Sơ đồ gia phả trực quan, lịch tộc & kiểm duyệt đổi mới
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Đang xem: <span className="font-semibold text-slate-700">{activeTree?.name}</span> ({members.length} thành viên)
             </p>
+
+            {/* Tree Switcher Dropdown */}
+            {isTreeDropdownOpen && (
+              <div className="absolute left-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2 z-50 animate-in fade-in slide-in-from-top-2">
+                <div className="px-3.5 py-1.5 border-b border-slate-100 flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    Danh Sách Gia Phả ({trees.length})
+                  </span>
+                  {canCreateTree && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsTreeDropdownOpen(false);
+                        setActiveTab("admin");
+                      }}
+                      className="text-[10px] font-bold text-blue-600 hover:underline cursor-pointer"
+                    >
+                      + Quản lý Cây
+                    </button>
+                  )}
+                </div>
+
+                <div className="max-h-60 overflow-y-auto divide-y divide-slate-100">
+                  {trees.map((t) => {
+                    const isCurrent = t.id === activeTreeId;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveTreeId(t.id);
+                          setIsTreeDropdownOpen(false);
+                          if (activeTab !== "tree") setActiveTab("tree");
+                        }}
+                        className={`w-full px-3.5 py-2.5 text-left flex items-center justify-between transition-colors cursor-pointer ${
+                          isCurrent
+                            ? "bg-blue-50/80 text-blue-900 font-semibold"
+                            : "hover:bg-slate-50 text-slate-700"
+                        }`}
+                      >
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold leading-tight">
+                              {t.name}
+                            </span>
+                            {isCurrent && (
+                              <span className="w-2 h-2 rounded-full bg-blue-600" />
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-500">
+                            {t.originLocation || "Việt Nam"}
+                            {t.memberCount !== undefined ? ` • ${t.memberCount} người` : ""}
+                          </p>
+                        </div>
+                        <span
+                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                            t.status === "ACTIVE"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : t.status === "CLOSED"
+                              ? "bg-slate-100 text-slate-600"
+                              : "bg-rose-100 text-rose-800"
+                          }`}
+                        >
+                          {t.status === "ACTIVE"
+                            ? "Đang mở"
+                            : t.status === "CLOSED"
+                            ? "Đã đóng"
+                            : "Khóa"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {canCreateTree && (
+                  <div className="p-2 border-t border-slate-100 bg-slate-50/50">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsTreeDropdownOpen(false);
+                        setActiveTab("admin");
+                      }}
+                      className="w-full py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      <span>Tạo Cây Gia Phả Mới</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -276,8 +412,20 @@ export default function Header({
           )}
         </div>
 
-        {/* Add Member Button */}
+        {/* Actions: Quick Import & Add Member Button */}
         <div className="flex items-center gap-2 shrink-0">
+          {canBulkImport && onOpenQuickImport && (
+            <button
+              type="button"
+              onClick={onOpenQuickImport}
+              className="inline-flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-300 px-3.5 py-2 rounded-xl text-xs font-bold shadow-2xs transition-all active:scale-95 cursor-pointer"
+              title="Nhập nhanh danh sách thành viên hàng loạt từ tệp hoặc chuỗi JSON"
+            >
+              <Upload className="w-4 h-4 text-blue-600" />
+              <span className="hidden sm:inline">Nhập Nhanh (JSON)</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={onOpenAddMember}

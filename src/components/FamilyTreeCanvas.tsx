@@ -21,6 +21,7 @@ import {
   ZoomOut,
   Maximize2,
   Users,
+  Upload,
 } from "lucide-react";
 import FamilyNode from "./tree/FamilyNode";
 import OrthogonalBloodlineEdge from "./tree/OrthogonalBloodlineEdge";
@@ -34,6 +35,7 @@ interface FamilyTreeCanvasProps {
   onQuickAddSpouse: (spouse: Member) => void;
   onEditMember: (m: Member) => void;
   onOpenAddMember: () => void;
+  onOpenQuickImport?: () => void;
   focusedMemberId?: string | null;
 }
 
@@ -51,9 +53,10 @@ function FamilyTreeCanvasInner({
   onQuickAddSpouse,
   onEditMember,
   onOpenAddMember,
+  onOpenQuickImport,
   focusedMemberId,
 }: FamilyTreeCanvasProps) {
-  const { members, saveCurrentData, refreshTrigger } = useFamilyStore();
+  const { members, saveCurrentData, refreshTrigger, canBulkImport } = useFamilyStore();
   const { fitView, setCenter } = useReactFlow();
 
   const handleSaveAndBackup = () => {
@@ -232,6 +235,19 @@ function FamilyTreeCanvasInner({
             <Save className="w-3.5 h-3.5 text-emerald-600" />
             <span className="hidden sm:inline">Lưu Dữ Liệu ({members.length})</span>
           </button>
+
+          {/* Quick Import (JSON) button */}
+          {canBulkImport && onOpenQuickImport && (
+            <button
+              type="button"
+              onClick={onOpenQuickImport}
+              className="px-3 py-1.5 border border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs active:scale-95"
+              title="Nhập dữ liệu thành viên nhanh hàng loạt từ tệp hoặc chuỗi JSON"
+            >
+              <Upload className="w-3.5 h-3.5 text-blue-600" />
+              <span>Nhập Nhanh (JSON)</span>
+            </button>
+          )}
 
           {/* Primary Add button */}
           <button

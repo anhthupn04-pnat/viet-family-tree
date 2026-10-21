@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { Member, PendingSubmission, EventItem, AdminUser } from "@/types/family";
+import { Member, PendingSubmission, EventItem, AdminUser, Tree, UserSystemRole } from "@/types/family";
 import { lunarToSolar } from "@/utils/lunar";
 
 export const ROOT_SEED_MEMBERS: Member[] = [
@@ -337,12 +337,53 @@ export const ROOT_SEED_PENDING: PendingSubmission[] = [
   },
 ];
 
+export const DEFAULT_TREES: Tree[] = [
+  {
+    id: "tree-phan-family",
+    name: "Gia Phả Tộc Phan (Quảng Nam)",
+    slug: "gia-pha-toc-phan",
+    originLocation: "Điện Bàn, Quảng Nam",
+    description: "Cây gia phả chính thống của dòng tộc Phan Thạnh",
+    status: "ACTIVE",
+    creatorId: "admin-super",
+    createdAt: "2026-01-01",
+    updatedAt: "2026-10-21",
+    memberCount: ROOT_SEED_MEMBERS.length,
+  },
+  {
+    id: "tree-tran-family",
+    name: "Gia Phả Tộc Trần (Huế)",
+    slug: "gia-pha-toc-tran-hue",
+    originLocation: "Hương Thủy, Thừa Thiên Huế",
+    description: "Nhánh gia phả bên ngoại Tộc Trần",
+    status: "ACTIVE",
+    creatorId: "admin-super",
+    createdAt: "2026-02-15",
+    updatedAt: "2026-10-21",
+    memberCount: 0,
+  },
+  {
+    id: "tree-le-family",
+    name: "Gia Phả Tộc Lê (Thanh Hóa)",
+    slug: "gia-pha-toc-le-thanh-hoa",
+    originLocation: "Nga Sơn, Thanh Hóa",
+    description: "Cây phả hệ Tộc Lê phát tích miền Bắc",
+    status: "CLOSED",
+    creatorId: "admin-super",
+    createdAt: "2026-03-10",
+    updatedAt: "2026-10-21",
+    memberCount: 0,
+  },
+];
+
 const STORAGE_MEMBERS = "phan_family_members_v3";
 const STORAGE_MEMBERS_LEGACY = "viet_family_tree_members_v2";
 const STORAGE_PENDING = "phan_family_pending_v2";
 const STORAGE_EVENTS = "phan_family_events_v2";
 const STORAGE_ADMINS = "phan_family_admins_v2";
 const STORAGE_SESSION = "phan_family_admin_session";
+const STORAGE_TREES = "phan_family_trees_v2";
+const STORAGE_ACTIVE_TREE = "phan_family_active_tree_v2";
 
 interface FamilyStoreContextType {
   members: Member[];
@@ -353,6 +394,26 @@ interface FamilyStoreContextType {
   isAdmin: boolean;
   isSuperAdmin: boolean;
   pendingCount: number;
+
+  // Multi-Tree & RBAC System
+  trees: Tree[];
+  activeTreeId: string;
+  activeTree: Tree;
+  setActiveTreeId: (id: string) => void;
+  userRole: UserSystemRole;
+  canManageCurrentTree: boolean;
+  canCreateTree: boolean;
+  canBulkImport: boolean;
+  createTree: (data: { name: string; originLocation?: string; description?: string; slug?: string }) => Promise<Tree>;
+  updateTree: (id: string, updates: Partial<Tree>) => Promise<void>;
+  deleteTree: (id: string) => Promise<void>;
+  assignTreeManager: (userId: string, treeIds: string[]) => void;
+
+  // Bulk Import
+  bulkImportMembers: (
+    importedMembers: Member[],
+    stats?: { createdCount: number; updatedCount: number; skippedCount: number }
+  ) => void;
 
   // Auth
   loginAdmin: (email: string, password: string) => { success: boolean; message?: string };
@@ -393,10 +454,50 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
   const [currentAdmin, setCurrentAdmin] = useState<AdminUser | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
+  // Multi-Tree System States
+  const [trees, setTrees] = useState<Tree[]>(DEFAULT_TREES);
+  const [activeTreeId, setActiveTreeIdState] = useState<string>("tree-phan-family");
+
   // Load from localStorage on mount
   useEffect(() => {
     try {
-      // 1. Members (Kiểm tra cả 2 khóa để bảo toàn 100% dữ liệu đã nhập)
+      // 1. Multi-Tree
+      const storedTrees = localStorage.getItem(STORAGE_TREES);
+      if (storedTrees) {
+        const parsed = JSON.parse(storedTrees);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setTrees(parsed);
+        }
+      } else {
+        localStorage.setItem(STORAGE_TREES, JSON.stringify(DEFAULT_TREES));
+      }
+
+      const storedActiveTree = localStorage.getItem(STORAGE_ACTIVE_TREE);
+      if (storedActiveTree) {
+        setActiveTreeIdState(storedActiveTree);
+      }
+
+      // Fetch latest trees from API if available
+      fetch("/api/trees")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data && Array.isArray(data.trees) && data.trees.length > 0) {
+            setTrees((prev) => {
+              const merged = [...data.trees];
+              // Giữ lại các cây local nếu chưa sync
+              prev.forEach((pt) => {
+                if (!merged.some((t) => t.id === pt.id)) merged.push(pt);
+              });
+              try {
+                localStorage.setItem(STORAGE_TREES, JSON.stringify(merged));
+              } catch (e) {}
+              return merged;
+            });
+          }
+        })
+        .catch(() => {});
+
+      // 2. Members (Kiểm tra cả 2 khóa để bảo toàn 100% dữ liệu đã nhập)
       const storedMembers =
         localStorage.getItem(STORAGE_MEMBERS) ||
         localStorage.getItem(STORAGE_MEMBERS_LEGACY);
@@ -412,7 +513,7 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
         localStorage.setItem(STORAGE_MEMBERS_LEGACY, JSON.stringify(ROOT_SEED_MEMBERS));
       }
 
-      // 2. Pending Submissions
+      // 3. Pending Submissions
       const storedPending = localStorage.getItem(STORAGE_PENDING);
       if (storedPending) {
         const parsed = JSON.parse(storedPending);
@@ -423,7 +524,7 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
         localStorage.setItem(STORAGE_PENDING, JSON.stringify(ROOT_SEED_PENDING));
       }
 
-      // 3. Events
+      // 4. Events
       const storedEvents = localStorage.getItem(STORAGE_EVENTS);
       if (storedEvents) {
         const parsed = JSON.parse(storedEvents);
@@ -434,7 +535,7 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
         localStorage.setItem(STORAGE_EVENTS, JSON.stringify(ROOT_SEED_EVENTS));
       }
 
-      // 4. Admin Users
+      // 5. Admin Users
       const storedAdmins = localStorage.getItem(STORAGE_ADMINS);
       if (storedAdmins) {
         const parsed = JSON.parse(storedAdmins);
@@ -445,7 +546,7 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
         localStorage.setItem(STORAGE_ADMINS, JSON.stringify(ROOT_SEED_ADMINS));
       }
 
-      // 5. Admin Session
+      // 6. Admin Session
       const storedSession = localStorage.getItem(STORAGE_SESSION);
       if (storedSession) {
         const parsed = JSON.parse(storedSession);
@@ -458,9 +559,76 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
     }
   }, []);
 
+  // Chuyển đổi Cây Gia Phả đang hiển thị (Switch Tree)
+  const setActiveTreeId = useCallback((treeId: string) => {
+    setActiveTreeIdState(treeId);
+    try {
+      localStorage.setItem(STORAGE_ACTIVE_TREE, treeId);
+    } catch (e) {}
+
+    // Load thành viên tương ứng của cây này nếu có
+    if (treeId === "tree-phan-family") {
+      const stored = localStorage.getItem(STORAGE_MEMBERS);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) setMembers(parsed);
+        } catch (e) {}
+      }
+    } else {
+      const treeMembersKey = `tree_members_${treeId}`;
+      const stored = localStorage.getItem(treeMembersKey);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) setMembers(parsed);
+        } catch (e) {}
+      } else {
+        // Tải từ API nếu có
+        fetch(`/api/trees/${treeId}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (data?.tree?.members && Array.isArray(data.tree.members)) {
+              setMembers(data.tree.members);
+            } else {
+              setMembers([]);
+            }
+          })
+          .catch(() => setMembers([]));
+      }
+    }
+    setRefreshTrigger((prev) => prev + 1);
+  }, []);
+
+  const activeTree =
+    trees.find((t) => t.id === activeTreeId) ||
+    trees[0] ||
+    DEFAULT_TREES[0];
+
   const pendingCount = pendingSubmissions.filter((s) => s.status === "pending").length;
   const isAdmin = !!currentAdmin;
-  const isSuperAdmin = currentAdmin?.role === "super_admin";
+
+  // RBAC Permission Model:
+  // - SUPER_ADMIN: Toàn quyền tạo cây, sửa cây, gán quyền, bulk import mọi nơi
+  // - TREE_MANAGER: Quản lý & bulk import trên các cây được gán (assignedTrees)
+  // - VIEWER: Chỉ xem
+  const userRole: UserSystemRole = currentAdmin
+    ? currentAdmin.role === "super_admin"
+      ? "SUPER_ADMIN"
+      : "TREE_MANAGER"
+    : "VIEWER";
+
+  const isSuperAdmin = userRole === "SUPER_ADMIN";
+  const canCreateTree = isSuperAdmin;
+  const canManageCurrentTree =
+    isSuperAdmin ||
+    (userRole === "TREE_MANAGER" &&
+      (!currentAdmin?.assignedTrees ||
+        currentAdmin.assignedTrees.includes("*") ||
+        currentAdmin.assignedTrees.includes(activeTreeId) ||
+        activeTreeId === "tree-phan-family")); // Mặc định gán quyền cây demo cho Ban Trị Sự
+
+  const canBulkImport = canManageCurrentTree;
 
   // Auth: Login
   const loginAdmin = useCallback(
@@ -775,6 +943,193 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
     [members]
   );
 
+  // ============================================================================
+  // MULTI-TREE & RBAC METHODS
+  // ============================================================================
+
+  // Tạo cây gia phả mới (Chỉ Super Admin)
+  const createTree = useCallback(
+    async (data: {
+      name: string;
+      originLocation?: string;
+      description?: string;
+      slug?: string;
+    }): Promise<Tree> => {
+      const generatedSlug =
+        data.slug ||
+        data.name
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[đĐ]/g, "d")
+          .replace(/[^a-z0-9\s-]/g, "")
+          .trim()
+          .replace(/\s+/g, "-") + `-${Date.now().toString().slice(-4)}`;
+
+      const newTree: Tree = {
+        id: `tree-${Date.now()}`,
+        name: data.name.trim(),
+        slug: generatedSlug,
+        originLocation: data.originLocation?.trim() || "Chưa xác định",
+        description: data.description?.trim() || null as any,
+        status: "ACTIVE",
+        creatorId: currentAdmin?.id || "admin-super",
+        createdAt: new Date().toISOString().split("T")[0],
+        updatedAt: new Date().toISOString().split("T")[0],
+        memberCount: 0,
+      };
+
+      // Gọi API Backend nếu có kết nối
+      try {
+        const res = await fetch("/api/trees", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-user-email": currentAdmin?.email || "anhthuphan0102@gmail.com",
+          },
+          body: JSON.stringify(data),
+        });
+        if (res.ok) {
+          const resData = await res.json();
+          if (resData.tree) {
+            newTree.id = resData.tree.id;
+            newTree.slug = resData.tree.slug;
+          }
+        }
+      } catch (e) {
+        console.warn("Backend create tree sync error:", e);
+      }
+
+      setTrees((prev) => {
+        const next = [newTree, ...prev];
+        try {
+          localStorage.setItem(STORAGE_TREES, JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
+
+      // Tự động chuyển sang cây vừa tạo
+      setActiveTreeId(newTree.id);
+      setMembers([]);
+
+      setRefreshTrigger((prev) => prev + 1);
+      return newTree;
+    },
+    [currentAdmin, setActiveTreeId]
+  );
+
+  // Cập nhật thông tin / trạng thái cây gia phả (Super Admin)
+  const updateTree = useCallback(
+    async (id: string, updates: Partial<Tree>): Promise<void> => {
+      try {
+        await fetch(`/api/trees/${id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "x-user-email": currentAdmin?.email || "anhthuphan0102@gmail.com",
+          },
+          body: JSON.stringify(updates),
+        });
+      } catch (e) {}
+
+      setTrees((prev) => {
+        const next = prev.map((t) => (t.id === id ? { ...t, ...updates } : t));
+        try {
+          localStorage.setItem(STORAGE_TREES, JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
+
+      setRefreshTrigger((prev) => prev + 1);
+    },
+    [currentAdmin]
+  );
+
+  // Xóa cây gia phả (Super Admin)
+  const deleteTree = useCallback(
+    async (id: string): Promise<void> => {
+      try {
+        await fetch(`/api/trees/${id}`, {
+          method: "DELETE",
+          headers: {
+            "x-user-email": currentAdmin?.email || "anhthuphan0102@gmail.com",
+          },
+        });
+      } catch (e) {}
+
+      setTrees((prev) => {
+        const next = prev.filter((t) => t.id !== id);
+        try {
+          localStorage.setItem(STORAGE_TREES, JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
+
+      if (activeTreeId === id) {
+        setActiveTreeId("tree-phan-family");
+      }
+      setRefreshTrigger((prev) => prev + 1);
+    },
+    [currentAdmin, activeTreeId, setActiveTreeId]
+  );
+
+  // Gán quyền quản lý cây (Assign TREE_MANAGER)
+  const assignTreeManager = useCallback(
+    (userId: string, treeIds: string[]) => {
+      setAdminUsers((prev) => {
+        const next = prev.map((u) => (u.id === userId ? { ...u, assignedTrees: treeIds } : u));
+        try {
+          localStorage.setItem(STORAGE_ADMINS, JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
+
+      // Gửi lên API
+      fetch(`/api/users/${userId}/roles`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-email": "anhthuphan0102@gmail.com",
+        },
+        body: JSON.stringify({ treeIds }),
+      }).catch(() => {});
+
+      setRefreshTrigger((prev) => prev + 1);
+    },
+    []
+  );
+
+  // Nhập hàng loạt thành viên (Bulk Import)
+  const bulkImportMembers = useCallback(
+    (
+      importedMembers: Member[],
+      stats?: { createdCount: number; updatedCount: number; skippedCount: number }
+    ) => {
+      setMembers(importedMembers);
+      try {
+        const jsonStr = JSON.stringify(importedMembers);
+        if (activeTreeId === "tree-phan-family") {
+          localStorage.setItem(STORAGE_MEMBERS, jsonStr);
+          localStorage.setItem(STORAGE_MEMBERS_LEGACY, jsonStr);
+        } else {
+          localStorage.setItem(`tree_members_${activeTreeId}`, jsonStr);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+
+      // Cập nhật số lượng thành viên của cây hiện tại
+      setTrees((prev) =>
+        prev.map((t) =>
+          t.id === activeTreeId ? { ...t, memberCount: importedMembers.length } : t
+        )
+      );
+
+      setRefreshTrigger((prev) => prev + 1);
+    },
+    [activeTreeId]
+  );
+
   return (
     <FamilyStoreContext.Provider
       value={{
@@ -786,6 +1141,24 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
         isAdmin,
         isSuperAdmin,
         pendingCount,
+
+        // Multi-Tree & RBAC
+        trees,
+        activeTreeId,
+        activeTree,
+        setActiveTreeId,
+        userRole,
+        canManageCurrentTree,
+        canCreateTree,
+        canBulkImport,
+        createTree,
+        updateTree,
+        deleteTree,
+        assignTreeManager,
+
+        // Bulk Import
+        bulkImportMembers,
+
         loginAdmin,
         logoutAdmin,
         createAdminUser,

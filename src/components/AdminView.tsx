@@ -22,8 +22,18 @@ import {
   FileText,
   BadgeCheck,
   Search,
+  FolderTree,
+  Edit3,
+  Lock,
+  Unlock,
+  Globe,
+  Building,
+  CheckSquare,
+  Square,
+  Settings,
+  Shield,
 } from "lucide-react";
-import { PendingSubmission, AdminUser } from "@/types/family";
+import { PendingSubmission, AdminUser, Tree } from "@/types/family";
 import { useFamilyStore } from "@/lib/family-store";
 
 interface AdminViewProps {
@@ -39,13 +49,20 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
     adminUsers,
     currentAdmin,
     isSuperAdmin,
+    trees,
+    activeTreeId,
+    setActiveTreeId,
+    createTree,
+    updateTree,
+    deleteTree,
+    assignTreeManager,
     approveSubmission,
     rejectSubmission,
     createAdminUser,
     getMember,
   } = useFamilyStore();
 
-  const [activeTab, setActiveTab] = useState<"queue" | "stats" | "admins">("queue");
+  const [activeTab, setActiveTab] = useState<"queue" | "trees" | "rbac" | "stats">("queue");
   const [queueFilter, setQueueFilter] = useState<"all" | "pending" | "approved" | "rejected">(
     "pending"
   );
@@ -58,9 +75,30 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
   const [newAdminEmail, setNewAdminEmail] = useState("");
   const [newAdminPassword, setNewAdminPassword] = useState("");
   const [newAdminRole, setNewAdminRole] = useState<"admin" | "super_admin">("admin");
+  const [newUserAssignedTrees, setNewUserAssignedTrees] = useState<string[]>([]);
   const [adminFormMsg, setAdminFormMsg] = useState<{ type: "success" | "error"; text: string } | null>(
     null
   );
+
+  // Multi-tree states
+  const [showCreateTreeModal, setShowCreateTreeModal] = useState(false);
+  const [newTreeName, setNewTreeName] = useState("");
+  const [newTreeLocation, setNewTreeLocation] = useState("");
+  const [newTreeDescription, setNewTreeDescription] = useState("");
+  const [newTreeSlug, setNewTreeSlug] = useState("");
+  const [treeActionLoading, setTreeActionLoading] = useState(false);
+  const [treeActionMsg, setTreeActionMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Edit tree modal state
+  const [editingTree, setEditingTree] = useState<Tree | null>(null);
+  const [editTreeName, setEditTreeName] = useState("");
+  const [editTreeLocation, setEditTreeLocation] = useState("");
+  const [editTreeDescription, setEditTreeDescription] = useState("");
+  const [editTreeStatus, setEditTreeStatus] = useState<"ACTIVE" | "CLOSED" | "LOCKED">("ACTIVE");
+
+  // Role Assignment modal state
+  const [assigningUser, setAssigningUser] = useState<AdminUser | null>(null);
+  const [selectedTreesForUser, setSelectedTreesForUser] = useState<string[]>([]);
 
   // Statistics calculation
   const totalMembers = members.length;
@@ -100,6 +138,7 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
       email: newAdminEmail.trim(),
       password: newAdminPassword.trim(),
       role: newAdminRole,
+      assignedTreeIds: newAdminRole === "admin" ? newUserAssignedTrees : undefined,
     });
 
     if (res.success) {
@@ -107,6 +146,7 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
       setNewAdminName("");
       setNewAdminEmail("");
       setNewAdminPassword("");
+      setNewUserAssignedTrees([]);
       setTimeout(() => {
         setShowAddAdminModal(false);
         setAdminFormMsg(null);
@@ -114,6 +154,87 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
     } else {
       setAdminFormMsg({ type: "error", text: res.message });
     }
+  };
+
+  const handleCreateTree = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTreeName.trim()) return;
+    setTreeActionLoading(true);
+    setTreeActionMsg(null);
+    try {
+      await createTree({
+        name: newTreeName.trim(),
+        originLocation: newTreeLocation.trim() || undefined,
+        description: newTreeDescription.trim() || undefined,
+        slug: newTreeSlug.trim() || undefined,
+      });
+      setTreeActionMsg({ type: "success", text: `Đã tạo gia phả "${newTreeName}" thành công!` });
+      setNewTreeName("");
+      setNewTreeLocation("");
+      setNewTreeDescription("");
+      setNewTreeSlug("");
+      setTimeout(() => {
+        setShowCreateTreeModal(false);
+        setTreeActionMsg(null);
+      }, 1200);
+    } catch (err: any) {
+      setTreeActionMsg({ type: "error", text: err.message || "Lỗi khi tạo cây gia phả" });
+    } finally {
+      setTreeActionLoading(false);
+    }
+  };
+
+  const handleUpdateTree = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTree) return;
+    setTreeActionLoading(true);
+    try {
+      await updateTree(editingTree.id, {
+        name: editTreeName.trim(),
+        originLocation: editTreeLocation.trim() || undefined,
+        description: editTreeDescription.trim() || undefined,
+        status: editTreeStatus,
+      });
+      setEditingTree(null);
+    } catch (err: any) {
+      alert("Lỗi khi cập nhật cây gia phả: " + (err.message || String(err)));
+    } finally {
+      setTreeActionLoading(false);
+    }
+  };
+
+  const handleDeleteTree = async (treeId: string, treeName: string) => {
+    if (
+      !confirm(
+        `Bạn có chắc chắn muốn xóa cây gia phả "${treeName}"? Mọi thành viên trong cây này sẽ bị xóa khỏi hệ thống.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteTree(treeId);
+    } catch (err: any) {
+      alert("Lỗi khi xóa cây: " + (err.message || String(err)));
+    }
+  };
+
+  const openEditTreeModal = (t: Tree) => {
+    setEditingTree(t);
+    setEditTreeName(t.name);
+    setEditTreeLocation(t.originLocation || "");
+    setEditTreeDescription(t.description || "");
+    setEditTreeStatus(t.status || "ACTIVE");
+  };
+
+  const openAssignModal = (u: AdminUser) => {
+    setAssigningUser(u);
+    setSelectedTreesForUser(u.assignedTrees || u.assignedTreeIds || []);
+  };
+
+  const handleSaveTreeRoles = () => {
+    if (!assigningUser) return;
+    assignTreeManager(assigningUser.id, selectedTreesForUser);
+    setAssigningUser(null);
   };
 
   const handleApprove = (id: string) => {
@@ -152,49 +273,57 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex items-center bg-slate-100 p-1 rounded-xl self-start md:self-auto">
+        <div className="flex items-center bg-slate-100 p-1 rounded-xl self-start md:self-auto overflow-x-auto no-scrollbar">
           <button
             type="button"
             onClick={() => setActiveTab("queue")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
               activeTab === "queue"
                 ? "bg-white text-blue-600 shadow-xs"
                 : "text-slate-600 hover:text-slate-900"
             }`}
           >
             <Clock className="w-3.5 h-3.5" />
-            <span>Hàng Đợi Xét Duyệt</span>
-            {pendingCount > 0 && (
-              <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-extrabold">
-                {pendingCount}
-              </span>
-            )}
+            <span>Hàng Đợi ({pendingCount})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("trees")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              activeTab === "trees"
+                ? "bg-white text-blue-600 shadow-xs"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <FolderTree className="w-3.5 h-3.5" />
+            <span>Cây Gia Phả ({trees.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("rbac")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              activeTab === "rbac"
+                ? "bg-white text-blue-600 shadow-xs"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Phân Quyền RBAC ({adminUsers.length})</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("stats")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
               activeTab === "stats"
                 ? "bg-white text-blue-600 shadow-xs"
                 : "text-slate-600 hover:text-slate-900"
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Dashboard Thống Kê</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("admins")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeTab === "admins"
-                ? "bg-white text-blue-600 shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <UserCheck className="w-3.5 h-3.5" />
-            <span>Tài Khoản Admin ({adminUsers.length})</span>
+            <span>Thống Kê</span>
           </button>
         </div>
       </div>
@@ -672,17 +801,145 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
         </div>
       )}
 
-      {/* TAB 3: QUẢN LÝ TÀI KHOẢN ADMIN (/admin/users) */}
-      {activeTab === "admins" && (
+      {/* TAB 2: QUẢN LÝ CÂY GIA PHẢ (MULTI-TREE) */}
+      {activeTab === "trees" && (
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <div>
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-blue-600" />
-                <span>Danh Sách Quản Trị Viên Dòng Họ</span>
+                <FolderTree className="w-5 h-5 text-blue-600" />
+                <span>Quản Lý Danh Sách Cây Gia Phả Hệ Thống</span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Các tài khoản có thẩm quyền phê duyệt hồ sơ và can thiệp trực tiếp vào dữ liệu gia phả.
+                Chỉ <strong>Super Admin</strong> mới có quyền tạo cây gia phả mới. Quản lý trạng thái, phân công phụ trách và chuyển đổi nhanh giữa các nhánh tộc.
+              </p>
+            </div>
+
+            {isSuperAdmin && (
+              <button
+                type="button"
+                onClick={() => setShowCreateTreeModal(true)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer self-start sm:self-auto transition-transform active:scale-95"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>+ Tạo Gia Phả Mới</span>
+              </button>
+            )}
+          </div>
+
+          {/* Trees Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {trees.map((t) => {
+              const isActive = t.id === activeTreeId;
+              const statusColors =
+                t.status === "ACTIVE"
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  : t.status === "CLOSED"
+                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                  : "bg-rose-50 text-rose-700 border-rose-200";
+              const statusLabel =
+                t.status === "ACTIVE"
+                  ? "Đang hoạt động"
+                  : t.status === "CLOSED"
+                  ? "Đã đóng"
+                  : "Bị khóa";
+
+              return (
+                <div
+                  key={t.id}
+                  className={`relative p-5 rounded-2xl border transition-all ${
+                    isActive
+                      ? "border-blue-500 bg-blue-50/20 shadow-md ring-2 ring-blue-500/20"
+                      : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusColors}`}
+                    >
+                      {statusLabel}
+                    </span>
+                    {isActive && (
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-blue-600 text-white shadow-xs">
+                        Đang kích hoạt
+                      </span>
+                    )}
+                  </div>
+
+                  <h4 className="font-bold text-slate-900 text-base mb-1">{t.name}</h4>
+                  {t.originLocation && (
+                    <p className="text-xs text-slate-500 flex items-center gap-1 mb-2">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate">{t.originLocation}</span>
+                    </p>
+                  )}
+                  {t.description && (
+                    <p className="text-xs text-slate-600 line-clamp-2 mb-3 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                      {t.description}
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-between text-xs text-slate-500 pt-3 border-t border-slate-100 mb-4">
+                    <span className="flex items-center gap-1 font-medium">
+                      <Users className="w-3.5 h-3.5 text-blue-600" />
+                      <span>{t.memberCount || 0} thành viên</span>
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400 truncate max-w-[120px]">
+                      {t.slug || t.id}
+                    </span>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTreeId(t.id);
+                        onNavigateTab("tree");
+                      }}
+                      className="flex-1 py-1.5 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold cursor-pointer text-center transition-colors"
+                    >
+                      Xem Phả Hệ
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => openEditTreeModal(t)}
+                      className="p-1.5 text-slate-600 hover:text-blue-600 hover:bg-blue-50 border border-slate-200 rounded-lg cursor-pointer transition-colors"
+                      title="Chỉnh sửa thông tin / Trạng thái"
+                    >
+                      <Settings className="w-4 h-4" />
+                    </button>
+
+                    {isSuperAdmin && trees.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTree(t.id, t.name)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 rounded-lg cursor-pointer transition-colors"
+                        title="Xóa gia phả này"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: PHÂN QUYỀN HỆ THỐNG (RBAC) */}
+      {activeTab === "rbac" && (
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-blue-600" />
+                <span>Mô Hình Phân Quyền Vai Trò (Role-Based Access Control)</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Quản lý danh sách tài khoản quản trị và gán quyền phụ trách (TREE_MANAGER) trên từng gia phả cụ thể.
               </p>
             </div>
 
@@ -690,29 +947,73 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
               <button
                 type="button"
                 onClick={() => setShowAddAdminModal(true)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer self-start sm:self-auto transition-transform active:scale-95"
               >
                 <UserPlus className="w-4 h-4" />
-                <span>+ Thêm Admin Phụ</span>
+                <span>+ Thêm Tài Khoản Mới</span>
               </button>
             )}
           </div>
 
-          {/* Admin Table */}
+          {/* 3 Role Explanation Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="p-4 rounded-xl border border-purple-200 bg-purple-50/40">
+              <div className="flex items-center gap-2 text-purple-800 font-bold text-xs mb-1">
+                <Shield className="w-4 h-4 text-purple-600" />
+                <span>SUPER_ADMIN (Hệ thống)</span>
+              </div>
+              <ul className="text-[11px] text-purple-900/80 space-y-1 list-disc list-inside">
+                <li>Toàn quyền tạo mới gia phả (duy nhất có nút Tạo gia phả).</li>
+                <li>Quản lý danh mục gia phả (Đổi tên, Đóng/Mở, Xóa).</li>
+                <li>Cấp tài khoản và gán vai trò phụ trách các gia phả.</li>
+              </ul>
+            </div>
+
+            <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/40">
+              <div className="flex items-center gap-2 text-blue-800 font-bold text-xs mb-1">
+                <FolderTree className="w-4 h-4 text-blue-600" />
+                <span>TREE_MANAGER (Quản lý gia phả)</span>
+              </div>
+              <ul className="text-[11px] text-blue-900/80 space-y-1 list-disc list-inside">
+                <li>Xem, thêm, sửa, xóa thành viên trên các gia phả được chỉ định.</li>
+                <li>Được dùng tính năng &quot;Nhập dữ liệu nhanh&quot; (Bulk Import).</li>
+                <li>Không thể tạo thêm cây gia phả mới trong hệ thống.</li>
+              </ul>
+            </div>
+
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70">
+              <div className="flex items-center gap-2 text-slate-800 font-bold text-xs mb-1">
+                <Users className="w-4 h-4 text-slate-600" />
+                <span>VIEWER / MEMBER (Thành viên xem)</span>
+              </div>
+              <ul className="text-[11px] text-slate-700 space-y-1 list-disc list-inside">
+                <li>Tra cứu cây phả hệ, thông tin liên lạc con cháu.</li>
+                <li>Xem lịch giỗ chạp và sự kiện sinh hoạt dòng họ.</li>
+                <li>Không có quyền can thiệp hay thay đổi dữ liệu gia phả.</li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Accounts & Tree Assignments Table */}
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 uppercase text-[10px] font-bold">
                   <th className="py-2.5 px-3">Họ và tên</th>
                   <th className="py-2.5 px-3">Email đăng nhập</th>
-                  <th className="py-2.5 px-3">Vai trò</th>
+                  <th className="py-2.5 px-3">Vai trò hệ thống</th>
+                  <th className="py-2.5 px-3">Cây gia phả phụ trách</th>
                   <th className="py-2.5 px-3">Ngày tạo</th>
-                  <th className="py-2.5 px-3">Trạng thái</th>
+                  <th className="py-2.5 px-3 text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {adminUsers.map((u) => {
                   const isSuper = u.role === "super_admin";
+                  const assignedTrees = trees.filter((t) =>
+                    (u.assignedTrees || u.assignedTreeIds || []).includes(t.id)
+                  );
+
                   return (
                     <tr key={u.id} className="hover:bg-slate-50/70 transition-colors">
                       <td className="py-3 px-3 font-bold text-slate-900">{u.name}</td>
@@ -725,15 +1026,42 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
                               : "bg-blue-100 text-blue-800 border border-blue-200"
                           }`}
                         >
-                          {isSuper ? "Super Admin" : "Ban Trị Sự"}
+                          {isSuper ? "Super Admin" : "Tree Manager"}
                         </span>
                       </td>
-                      <td className="py-3 px-3 text-slate-500">{u.createdAt}</td>
                       <td className="py-3 px-3">
-                        <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold text-[11px]">
-                          <BadgeCheck className="w-3.5 h-3.5" />
-                          <span>Đang hoạt động</span>
-                        </span>
+                        {isSuper ? (
+                          <span className="text-[11px] font-medium text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                            Toàn quyền mọi gia phả ({trees.length} cây)
+                          </span>
+                        ) : assignedTrees.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {assignedTrees.map((at) => (
+                              <span
+                                key={at.id}
+                                className="text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md"
+                              >
+                                {at.name}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-amber-600 italic">
+                            Chưa gán cây gia phả nào
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-slate-500">{u.createdAt}</td>
+                      <td className="py-3 px-3 text-right">
+                        {isSuperAdmin && !isSuper && (
+                          <button
+                            type="button"
+                            onClick={() => openAssignModal(u)}
+                            className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                          >
+                            Phân Quyền Gia Phả
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -744,14 +1072,306 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
         </div>
       )}
 
-      {/* Modal Thêm Admin Phụ */}
+      {/* MODAL 1: TẠO GIA PHẢ MỚI (CHỈ SUPER ADMIN) */}
+      {showCreateTreeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden">
+            <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <PlusCircle className="w-5 h-5 text-blue-400" />
+                <h3 className="font-bold text-sm">Tạo Cây Gia Phả Mới (Super Admin)</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateTreeModal(false)}
+                className="text-white/80 hover:text-white"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateTree} className="p-5 space-y-3.5 text-xs">
+              {treeActionMsg && (
+                <div
+                  className={`p-2.5 rounded-lg border text-xs font-semibold ${
+                    treeActionMsg.type === "success"
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      : "bg-rose-50 text-rose-800 border-rose-200"
+                  }`}
+                >
+                  {treeActionMsg.text}
+                </div>
+              )}
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Tên cây gia phả / Tộc họ *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Gia Phả Tộc Phan (Quảng Nam - Chi Giáp)"
+                  value={newTreeName}
+                  onChange={(e) => setNewTreeName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Quê quán / Nơi phát tích gốc
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ví dụ: Điện Bàn, Quảng Nam"
+                  value={newTreeLocation}
+                  onChange={(e) => setNewTreeLocation(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Mô tả vắn tắt / Lịch sử nhánh
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Mô tả nguồn gốc hoặc lưu ý đặc thù của chi phái..."
+                  value={newTreeDescription}
+                  onChange={(e) => setNewTreeDescription(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Mã định danh Slug (Tùy chọn)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ví dụ: gia-pha-toc-phan-quang-nam"
+                  value={newTreeSlug}
+                  onChange={(e) => setNewTreeSlug(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-[11px]"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateTreeModal(false)}
+                  className="px-3.5 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 font-medium cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={treeActionLoading}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  <span>{treeActionLoading ? "Đang tạo..." : "Xác Nhận Tạo Gia Phả"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: CHỈNH SỬA CÂY GIA PHẢ */}
+      {editingTree && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden">
+            <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Settings className="w-5 h-5 text-blue-400" />
+                <h3 className="font-bold text-sm">Cập Nhật Cây Gia Phả: {editingTree.name}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingTree(null)}
+                className="text-white/80 hover:text-white"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateTree} className="p-5 space-y-3.5 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Tên cây gia phả *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editTreeName}
+                  onChange={(e) => setEditTreeName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Quê quán / Phát tích
+                </label>
+                <input
+                  type="text"
+                  value={editTreeLocation}
+                  onChange={(e) => setEditTreeLocation(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Mô tả
+                </label>
+                <textarea
+                  rows={2}
+                  value={editTreeDescription}
+                  onChange={(e) => setEditTreeDescription(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Trạng thái hoạt động
+                </label>
+                <select
+                  value={editTreeStatus}
+                  onChange={(e) =>
+                    setEditTreeStatus(e.target.value as "ACTIVE" | "CLOSED" | "LOCKED")
+                  }
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                >
+                  <option value="ACTIVE">ACTIVE - Đang hoạt động bình thường</option>
+                  <option value="CLOSED">CLOSED - Tạm đóng / Lưu trữ</option>
+                  <option value="LOCKED">LOCKED - Khóa chỉnh sửa</option>
+                </select>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingTree(null)}
+                  className="px-3.5 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 font-medium cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={treeActionLoading}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>{treeActionLoading ? "Đang lưu..." : "Lưu Thay Đổi"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: PHÂN QUYỀN GIA PHẢ CHO USER */}
+      {assigningUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden">
+            <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FolderTree className="w-5 h-5 text-blue-400" />
+                <h3 className="font-bold text-sm">Phân Quyền Phụ Trách Gia Phả</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAssigningUser(null)}
+                className="text-white/80 hover:text-white"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <p className="font-bold text-slate-900">{assigningUser.name}</p>
+                <p className="text-slate-500 font-mono text-[11px]">{assigningUser.email}</p>
+                <p className="text-[10px] text-blue-600 font-semibold mt-1">
+                  Vai trò: {assigningUser.role === "super_admin" ? "SUPER_ADMIN" : "TREE_MANAGER"}
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-2">
+                  Chọn các cây gia phả tài khoản này được quyền quản lý:
+                </label>
+                <div className="space-y-2 max-h-56 overflow-y-auto p-1">
+                  {trees.map((t) => {
+                    const checked = selectedTreesForUser.includes(t.id);
+                    return (
+                      <label
+                        key={t.id}
+                        className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                          checked
+                            ? "bg-blue-50/60 border-blue-300"
+                            : "bg-white border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedTreesForUser((prev) => [...prev, t.id]);
+                            } else {
+                              setSelectedTreesForUser((prev) =>
+                                prev.filter((id) => id !== t.id)
+                              );
+                            }
+                          }}
+                          className="mt-0.5 rounded text-blue-600 focus:ring-blue-500"
+                        />
+                        <div className="flex-1">
+                          <p className="font-bold text-slate-900">{t.name}</p>
+                          <p className="text-[10px] text-slate-500">
+                            {t.originLocation || "Không có địa danh"} • {t.memberCount || 0} thành viên
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setAssigningUser(null)}
+                  className="px-3.5 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 font-medium cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveTreeRoles}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Lưu Phân Quyền</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: THÊM TÀI KHOẢN MỚI */}
       {showAddAdminModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden">
             <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-blue-400" />
-                <h3 className="font-bold text-sm">Thêm Tài Khoản Quản Trị Viên Phụ</h3>
+                <h3 className="font-bold text-sm">Thêm Tài Khoản Quản Trị Hệ Thống</h3>
               </div>
               <button
                 type="button"
@@ -777,7 +1397,7 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Họ và tên thành viên Ban Trị Sự *
+                  Họ và tên *
                 </label>
                 <input
                   type="text"
@@ -791,7 +1411,7 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Email đăng nhập *
+                  Email đăng nhập / Tên người dùng *
                 </label>
                 <input
                   type="email"
@@ -805,7 +1425,7 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Mật khẩu khởi tạo *
+                  Mật khẩu khởi tạo tạm thời *
                 </label>
                 <input
                   type="password"
@@ -819,19 +1439,54 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Vai trò quản trị
+                  Vai trò hệ thống
                 </label>
                 <select
                   value={newAdminRole}
                   onChange={(e) => setNewAdminRole(e.target.value as "admin" | "super_admin")}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
                 >
-                  <option value="admin">Ban Trị Sự (Admin duyệt & sửa trực tiếp)</option>
-                  <option value="super_admin">Super Admin (Tổng quản trị)</option>
+                  <option value="admin">TREE_MANAGER (Quản lý gia phả được chỉ định)</option>
+                  <option value="super_admin">SUPER_ADMIN (Tổng quản trị toàn quyền)</option>
                 </select>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              {newAdminRole === "admin" && (
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Gán phụ trách các gia phả ban đầu:
+                  </label>
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto p-1 border border-slate-200 rounded-lg">
+                    {trees.map((t) => {
+                      const checked = newUserAssignedTrees.includes(t.id);
+                      return (
+                        <label
+                          key={t.id}
+                          className="flex items-center gap-2 p-1.5 rounded hover:bg-slate-50 cursor-pointer text-[11px]"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setNewUserAssignedTrees((prev) => [...prev, t.id]);
+                              } else {
+                                setNewUserAssignedTrees((prev) =>
+                                  prev.filter((id) => id !== t.id)
+                                );
+                              }
+                            }}
+                            className="rounded text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="font-medium text-slate-800">{t.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowAddAdminModal(false)}

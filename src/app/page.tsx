@@ -9,6 +9,7 @@ import MemberDetailDrawer from "@/components/MemberDetailDrawer";
 import MemberFormModal, { QuickContext } from "@/components/MemberFormModal";
 import LoginModal from "@/components/LoginModal";
 import KinshipCalculatorModal from "@/components/KinshipCalculatorModal";
+import QuickImportModal from "@/components/QuickImportModal";
 import AnniversariesView from "@/components/AnniversariesView";
 import LotusFooter from "@/components/LotusFooter";
 import { Member } from "@/types/family";
@@ -16,7 +17,7 @@ import { FamilyStoreProvider, useFamilyStore } from "@/lib/family-store";
 import { CheckCircle2, X, Compass, Sparkles } from "lucide-react";
 
 function HomePageContent() {
-  const { members, isAdmin } = useFamilyStore();
+  const { members, isAdmin, activeTree, bulkImportMembers } = useFamilyStore();
   const [activeTab, setActiveTab] = useState<string>("tree");
 
   // Selection & Focus
@@ -25,6 +26,7 @@ function HomePageContent() {
 
   // Form Modal States
   const [showMemberFormModal, setShowMemberFormModal] = useState(false);
+  const [showQuickImportModal, setShowQuickImportModal] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [quickContext, setQuickContext] = useState<QuickContext | null>(null);
 
@@ -95,6 +97,7 @@ function HomePageContent() {
         setActiveTab={setActiveTab}
         onOpenLogin={() => setShowLoginModal(true)}
         onOpenAddMember={handleOpenAddMember}
+        onOpenQuickImport={() => setShowQuickImportModal(true)}
         onFocusMember={(id) => {
           setFocusedMemberId(id);
         }}
@@ -111,6 +114,7 @@ function HomePageContent() {
               onQuickAddSpouse={handleQuickAddSpouse}
               onEditMember={handleEditMember}
               onOpenAddMember={handleOpenAddMember}
+              onOpenQuickImport={() => setShowQuickImportModal(true)}
               focusedMemberId={focusedMemberId}
             />
           </div>
@@ -225,7 +229,22 @@ function HomePageContent() {
         }}
       />
 
-      {/* 4. Kinship Calculator Modal */}
+      {/* 4. Quick Import Modal (Tính năng 1: Nhập dữ liệu nhanh) */}
+      <QuickImportModal
+        isOpen={showQuickImportModal}
+        onClose={() => setShowQuickImportModal(false)}
+        currentMembers={members}
+        treeName={activeTree?.name}
+        treeId={activeTree?.id}
+        onImportSuccess={(newMembers, stats) => {
+          bulkImportMembers(newMembers, stats);
+          showToast(
+            `Đã nhập thành công ${stats.createdCount} thành viên mới, cập nhật ${stats.updatedCount} người vào ${activeTree?.name}!`
+          );
+        }}
+      />
+
+      {/* 5. Kinship Calculator Modal */}
       <KinshipCalculatorModal
         isOpen={showKinshipModal}
         onClose={() => setShowKinshipModal(false)}
