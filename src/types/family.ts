@@ -19,6 +19,7 @@ export interface Member {
   burialPlace?: string; // Mộ phần / nơi an táng
   titles?: string; // Chức tước, học vị, công danh
   bio?: string; // Tiểu sử tóm tắt
+  branch?: string; // Chi phái (ví dụ: Chi 1, Chi 2, Nhánh Giáp...)
   notes?: string;
   treeId?: string;
 }

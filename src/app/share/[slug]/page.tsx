@@ -36,6 +36,7 @@ import {
   AlertCircle,
   Copy,
   Info,
+  Landmark,
 } from "lucide-react";
 import { Member, Tree, SuggestionType } from "@/types/family";
 import FamilyNode from "@/components/tree/FamilyNode";
@@ -45,6 +46,7 @@ import MemberDetailDrawer from "@/components/MemberDetailDrawer";
 import KinshipCalculatorModal from "@/components/KinshipCalculatorModal";
 import CrowdsourceModal from "@/components/CrowdsourceModal";
 import AnniversariesModal from "@/components/AnniversariesModal";
+import DigitalLibraryModal from "@/components/DigitalLibraryModal";
 import { FamilyStoreProvider } from "@/lib/family-store";
 
 const nodeTypes = {
@@ -83,6 +85,7 @@ function PublicShareTreeContent() {
   // Modals
   const [showKinshipModal, setShowKinshipModal] = useState(false);
   const [showAnniversariesModal, setShowAnniversariesModal] = useState(false);
+  const [showDigitalLibraryModal, setShowDigitalLibraryModal] = useState(false);
   const [showCrowdsourceModal, setShowCrowdsourceModal] = useState(false);
   const [crowdsourceTarget, setCrowdsourceTarget] = useState<Member | null>(null);
   const [crowdsourceType, setCrowdsourceType] = useState<SuggestionType>("ADD_CHILD");
@@ -172,7 +175,7 @@ function PublicShareTreeContent() {
     }
   };
 
-  // Calculate layout
+  // Calculate layout (Supports both vertical and horizontal view)
   const { nodes: layoutNodes, edges: layoutEdges } = useMemo(() => {
     if (members.length === 0) return { nodes: [], edges: [] };
     return computeFamilyTreeLayout(members, {
@@ -184,8 +187,9 @@ function PublicShareTreeContent() {
       onQuickAddSpouse: () => {},
       onEditMember: () => {},
       focusedMemberId,
+      orientation,
     });
-  }, [members, focusedMemberId]);
+  }, [members, focusedMemberId, orientation]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutEdges);
@@ -195,17 +199,27 @@ function PublicShareTreeContent() {
     setEdges(layoutEdges);
   }, [layoutNodes, layoutEdges, setNodes, setEdges]);
 
-  // Search filtered results
+  // Search filtered results (Tìm theo họ tên, năm sinh, chi/phái, đời thứ mấy)
   const searchResults = useMemo(() => {
     if (!searchTerm.trim()) return [];
-    const q = searchTerm.toLowerCase();
-    return members.filter(
-      (m) =>
-        m.fullName.toLowerCase().includes(q) ||
-        (m.nickname && m.nickname.toLowerCase().includes(q)) ||
+    const q = searchTerm.toLowerCase().trim();
+    return members.filter((m) => {
+      const nameMatch = m.fullName.toLowerCase().includes(q);
+      const nickMatch = m.nickname ? m.nickname.toLowerCase().includes(q) : false;
+      const dateMatch =
         (m.birthDate && m.birthDate.includes(q)) ||
-        (m.address && m.address.toLowerCase().includes(q))
-    );
+        (m.deathDate && m.deathDate.includes(q));
+      const addressMatch = m.address ? m.address.toLowerCase().includes(q) : false;
+      const genMatch =
+        `đời ${m.generation}`.includes(q) ||
+        `đời thứ ${m.generation}`.includes(q) ||
+        `thế hệ ${m.generation}`.includes(q) ||
+        (q.startsWith("đời ") && String(m.generation) === q.replace("đời ", "").trim());
+      const branchMatch =
+        m.branch ? `chi ${m.branch}`.toLowerCase().includes(q) || m.branch.toLowerCase().includes(q) : false;
+
+      return nameMatch || nickMatch || dateMatch || addressMatch || genMatch || branchMatch;
+    });
   }, [members, searchTerm]);
 
   // Loading Screen
@@ -366,6 +380,15 @@ function PublicShareTreeContent() {
 
           <button
             type="button"
+            onClick={() => setShowDigitalLibraryModal(true)}
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold rounded-xl border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <Landmark className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">Thư Viện Số</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setShowKinshipModal(true)}
             className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold rounded-xl border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
           >
@@ -515,6 +538,13 @@ function PublicShareTreeContent() {
         isOpen={showAnniversariesModal}
         onClose={() => setShowAnniversariesModal(false)}
         isAdmin={false}
+      />
+
+      {/* Modal Thư Viện Số Dòng Tộc */}
+      <DigitalLibraryModal
+        isOpen={showDigitalLibraryModal}
+        onClose={() => setShowDigitalLibraryModal(false)}
+        tree={tree}
       />
 
       {/* Modal Đóng Góp Phả Hệ */}

@@ -22,6 +22,8 @@ import {
   Maximize2,
   Users,
   Upload,
+  Columns,
+  Rows,
 } from "lucide-react";
 import FamilyNode from "./tree/FamilyNode";
 import OrthogonalBloodlineEdge from "./tree/OrthogonalBloodlineEdge";
@@ -86,6 +88,7 @@ function FamilyTreeCanvasInner({
 
   const [search, setSearch] = useState("");
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [orientation, setOrientation] = useState<"vertical" | "horizontal">("vertical");
 
   // Compute Layout: Nodes & Orthogonal Step Edges
   const { nodes: initialNodes, edges: initialEdges } = useMemo(() => {
@@ -95,6 +98,7 @@ function FamilyTreeCanvasInner({
       onQuickAddSpouse,
       onEditMember,
       focusedMemberId,
+      orientation,
     });
   }, [
     members,
@@ -104,6 +108,7 @@ function FamilyTreeCanvasInner({
     onQuickAddSpouse,
     onEditMember,
     focusedMemberId,
+    orientation,
   ]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -214,6 +219,36 @@ function FamilyTreeCanvasInner({
 
         {/* Right: Actions */}
         <div className="flex items-center gap-2">
+          {/* Orientation Toggle */}
+          <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setOrientation("vertical")}
+              className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                orientation === "vertical"
+                  ? "bg-white text-blue-600 shadow-2xs"
+                  : "text-slate-500 hover:text-slate-900"
+              }`}
+              title="Sắp xếp dạng cây dọc (Truyền thống)"
+            >
+              <Columns className="w-3.5 h-3.5" />
+              <span className="hidden md:inline text-[11px]">Dọc</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrientation("horizontal")}
+              className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                orientation === "horizontal"
+                  ? "bg-white text-blue-600 shadow-2xs"
+                  : "text-slate-500 hover:text-slate-900"
+              }`}
+              title="Sắp xếp dạng ngang (Phát triển sang phải)"
+            >
+              <Rows className="w-3.5 h-3.5" />
+              <span className="hidden md:inline text-[11px]">Ngang</span>
+            </button>
+          </div>
+
           {/* Fit View button */}
           <button
             type="button"
@@ -222,7 +257,7 @@ function FamilyTreeCanvasInner({
             title="Căn giữa toàn bộ cây"
           >
             <Maximize2 className="w-3.5 h-3.5" />
-            <span>Căn Giữa Cây</span>
+            <span>Căn Giữa</span>
           </button>
 
           {/* Save & Backup button */}

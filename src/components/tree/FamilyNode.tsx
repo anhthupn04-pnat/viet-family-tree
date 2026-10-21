@@ -114,21 +114,41 @@ export default function FamilyNode({ data }: FamilyNodeProps) {
       style={{ width: 220, minHeight: 140 }}
     >
       {/* Handles for connections */}
-      {/* Top Handle for Parent-to-Child descent */}
+      {/* Top Handle for Parent-to-Child descent (Vertical target / Horizontal spouse target) */}
       <Handle
         type="target"
+        id="bloodline-top"
         position={Position.Top}
         className="!w-2.5 !h-2.5 !bg-[#8B1D1D] !border-2 !border-white shadow-sm"
       />
+      <Handle
+        type="target"
+        id="spouse-top"
+        position={Position.Top}
+        className="!w-2 !h-2 !bg-[#E11D48] !border-2 !border-white shadow-sm"
+      />
 
-      {/* Bottom Handle for Parent to Children */}
+      {/* Bottom Handle for Parent to Children (Vertical source / Horizontal spouse source) */}
       <Handle
         type="source"
+        id="bloodline-bottom"
         position={Position.Bottom}
         className="!w-2.5 !h-2.5 !bg-[#8B1D1D] !border-2 !border-white shadow-sm"
       />
+      <Handle
+        type="source"
+        id="spouse-bottom"
+        position={Position.Bottom}
+        className="!w-2 !h-2 !bg-[#E11D48] !border-2 !border-white shadow-sm"
+      />
 
-      {/* Left Handle for Spouse connection */}
+      {/* Left Handle (Vertical spouse-left / Horizontal bloodline-left target) */}
+      <Handle
+        type="target"
+        id="bloodline-left"
+        position={Position.Left}
+        className="!w-2.5 !h-2.5 !bg-[#8B1D1D] !border-2 !border-white shadow-sm"
+      />
       <Handle
         type="target"
         id="spouse-left"
@@ -136,7 +156,13 @@ export default function FamilyNode({ data }: FamilyNodeProps) {
         className="!w-2 !h-2 !bg-[#E11D48] !border-2 !border-white shadow-sm"
       />
 
-      {/* Right Handle for Spouse connection */}
+      {/* Right Handle (Vertical spouse-right / Horizontal bloodline-right source) */}
+      <Handle
+        type="source"
+        id="bloodline-right"
+        position={Position.Right}
+        className="!w-2.5 !h-2.5 !bg-[#8B1D1D] !border-2 !border-white shadow-sm"
+      />
       <Handle
         type="source"
         id="spouse-right"

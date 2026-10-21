@@ -7,6 +7,9 @@ export const SPOUSE_GAP = 28;
 export const SIBLING_GAP = 40;
 export const FAMILY_GAP = 60;
 export const LEVEL_HEIGHT = 270;
+export const LEVEL_WIDTH_H = 340;
+export const SIBLING_GAP_H = 36;
+export const FAMILY_GAP_H = 50;
 export const BASE_Y = 60;
 export const BASE_X = 60;
 
@@ -34,6 +37,7 @@ export interface FamilyLayoutOptions {
   onQuickAddSpouse: (m: Member) => void;
   onEditMember: (m: Member) => void;
   focusedMemberId?: string | null;
+  orientation?: "vertical" | "horizontal";
 }
 
 export function computeFamilyTreeLayout(
@@ -85,9 +89,24 @@ export function computeFamilyTreeLayout(
     }
     handled.add(m.id);
 
-    const unitWidth = secondary ? 2 * NODE_WIDTH + SPOUSE_GAP : NODE_WIDTH;
-    const stemOffset = secondary ? NODE_WIDTH + SPOUSE_GAP / 2 : NODE_WIDTH / 2;
-    const dropOffset = NODE_WIDTH / 2;
+    const isHorizontal = options.orientation === "horizontal";
+    const unitSpreadSize = isHorizontal
+      ? secondary
+        ? 2 * NODE_HEIGHT + SPOUSE_GAP
+        : NODE_HEIGHT
+      : secondary
+      ? 2 * NODE_WIDTH + SPOUSE_GAP
+      : NODE_WIDTH;
+
+    const stemOffset = isHorizontal
+      ? secondary
+        ? NODE_HEIGHT + SPOUSE_GAP / 2
+        : NODE_HEIGHT / 2
+      : secondary
+      ? NODE_WIDTH + SPOUSE_GAP / 2
+      : NODE_WIDTH / 2;
+
+    const dropOffset = isHorizontal ? NODE_HEIGHT / 2 : NODE_WIDTH / 2;
 
     const unit: TreeUnit = {
       id: "unit-" + primary.id,
@@ -95,10 +114,10 @@ export function computeFamilyTreeLayout(
       spouse: secondary,
       generation: primary.generation || 1,
       children: [],
-      width: unitWidth,
+      width: unitSpreadSize,
       stemOffset,
       dropOffset,
-      subtreeWidth: unitWidth,
+      subtreeWidth: unitSpreadSize,
       relativeX: 0,
       childOffsets: [],
       relativeDropX: dropOffset,
@@ -143,8 +162,12 @@ export function computeFamilyTreeLayout(
     return (a.primary.orderInFamily || 99) - (b.primary.orderInFamily || 99);
   });
 
+  const isHorizontal = options.orientation === "horizontal";
+  const siblingGap = isHorizontal ? SIBLING_GAP_H : SIBLING_GAP;
+  const familyGap = isHorizontal ? FAMILY_GAP_H : FAMILY_GAP;
+
   // 3. Tính toán bố cục cây con (Hierarchical Recursive Subtree Layout) từ dưới lên (Bottom-up)
-  // Đảm bảo: Điểm đâm nhánh từ cha mẹ (stemX) luôn ở CHÍNH GIỮA các điểm neo huyết thống của con (dropX)
+  // Đảm bảo: Điểm đâm nhánh từ cha mẹ (stemX/stemY) luôn ở CHÍNH GIỮA các điểm neo huyết thống của con (dropX/dropY)
   function layoutSubtree(unit: TreeUnit): number {
     if (unit.children.length === 0) {
       unit.subtreeWidth = unit.width;
@@ -164,45 +187,44 @@ export function computeFamilyTreeLayout(
 
     // 3.1 Tính toán bố cục các cây con của đàn con
     const childOffsets: number[] = [];
-    let currentChildX = 0;
+    let currentChildSpread = 0;
 
     unit.children.forEach((child, idx) => {
       layoutSubtree(child);
-      if (idx > 0) currentChildX += SIBLING_GAP;
-      childOffsets.push(currentChildX);
-      currentChildX += child.subtreeWidth;
+      if (idx > 0) currentChildSpread += siblingGap;
+      childOffsets.push(currentChildSpread);
+      currentChildSpread += child.subtreeWidth;
     });
 
-    const totalChildrenWidth = currentChildX;
+    const totalChildrenSpread = currentChildSpread;
 
     // 3.2 Xác định điểm neo huyết thống (drop point) của người con đầu và người con cuối
     const firstChild = unit.children[0];
     const lastChild = unit.children[unit.children.length - 1];
 
-    const firstDropX = childOffsets[0] + firstChild.relativeDropX;
-    const lastDropX =
+    const firstDrop = childOffsets[0] + firstChild.relativeDropX;
+    const lastDrop =
       childOffsets[childOffsets.length - 1] + lastChild.relativeDropX;
 
     // Điểm đâm nhánh lý tưởng của cha mẹ: CHÍNH GIỮA 2 ĐIỂM CON BIÊN
-    // Giúp đường kẻ ngang chữ T luôn cân xứng tuyệt đối 2 bên (stemX - firstDropX === lastDropX - stemX)
-    const idealStemX = (firstDropX + lastDropX) / 2;
+    const idealStem = (firstDrop + lastDrop) / 2;
 
-    // Tọa độ X tương đối của cha mẹ để stemX trùng khít với idealStemX
-    let parentRelativeX = idealStemX - unit.stemOffset;
+    // Tọa độ tương đối của cha mẹ để stem trùng khít với idealStem
+    let parentRelative = idealStem - unit.stemOffset;
 
     // 3.3 Kiểm tra vùng bao bao phủ cả cha mẹ lẫn các con
-    const minX = Math.min(0, parentRelativeX);
-    const maxX = Math.max(totalChildrenWidth, parentRelativeX + unit.width);
+    const minSpread = Math.min(0, parentRelative);
+    const maxSpread = Math.max(totalChildrenSpread, parentRelative + unit.width);
 
-    // Nếu cha mẹ mở rộng về phía bên trái (minX < 0), tịnh tiến toàn bộ cây sang phải
-    const shift = -minX;
-    parentRelativeX += shift;
+    // Nếu cha mẹ mở rộng về phía bên trái (minSpread < 0), tịnh tiến toàn bộ cây sang phải
+    const shift = -minSpread;
+    parentRelative += shift;
     for (let i = 0; i < childOffsets.length; i++) {
       childOffsets[i] += shift;
     }
 
-    unit.subtreeWidth = maxX + shift;
-    unit.relativeX = parentRelativeX;
+    unit.subtreeWidth = maxSpread + shift;
+    unit.relativeX = parentRelative;
     unit.childOffsets = childOffsets;
     unit.relativeDropX = unit.relativeX + unit.dropOffset;
     unit.relativeStemX = unit.relativeX + unit.stemOffset;
@@ -215,33 +237,54 @@ export function computeFamilyTreeLayout(
 
   function assignCoordinates(
     unit: TreeUnit,
-    subtreeOriginX: number,
-    levelY: number
+    subtreeOrigin: number,
+    levelCoord: number
   ) {
-    unit.x = subtreeOriginX + unit.relativeX;
-    unit.y = levelY;
+    if (isHorizontal) {
+      unit.x = levelCoord;
+      unit.y = subtreeOrigin + unit.relativeX;
 
-    nodePositions.set(unit.primary.id, { x: unit.x, y: unit.y });
-    if (unit.spouse) {
-      nodePositions.set(unit.spouse.id, {
-        x: unit.x + NODE_WIDTH + SPOUSE_GAP,
-        y: unit.y,
+      nodePositions.set(unit.primary.id, { x: unit.x, y: unit.y });
+      if (unit.spouse) {
+        nodePositions.set(unit.spouse.id, {
+          x: unit.x,
+          y: unit.y + NODE_HEIGHT + SPOUSE_GAP,
+        });
+      }
+
+      const nextLevel = levelCoord + LEVEL_WIDTH_H;
+      unit.children.forEach((child, idx) => {
+        const childOrigin = subtreeOrigin + unit.childOffsets[idx];
+        assignCoordinates(child, childOrigin, nextLevel);
+      });
+    } else {
+      unit.x = subtreeOrigin + unit.relativeX;
+      unit.y = levelCoord;
+
+      nodePositions.set(unit.primary.id, { x: unit.x, y: unit.y });
+      if (unit.spouse) {
+        nodePositions.set(unit.spouse.id, {
+          x: unit.x + NODE_WIDTH + SPOUSE_GAP,
+          y: unit.y,
+        });
+      }
+
+      const nextLevel = levelCoord + LEVEL_HEIGHT;
+      unit.children.forEach((child, idx) => {
+        const childOrigin = subtreeOrigin + unit.childOffsets[idx];
+        assignCoordinates(child, childOrigin, nextLevel);
       });
     }
-
-    const nextLevelY = levelY + LEVEL_HEIGHT;
-    unit.children.forEach((child, idx) => {
-      const childSubtreeOriginX = subtreeOriginX + unit.childOffsets[idx];
-      assignCoordinates(child, childSubtreeOriginX, nextLevelY);
-    });
   }
 
-  let currentRootX = BASE_X;
+  let currentRootOrigin = isHorizontal ? BASE_Y : BASE_X;
   rootUnits.forEach((root) => {
     layoutSubtree(root);
-    const rootY = BASE_Y + Math.max(0, root.generation - 1) * LEVEL_HEIGHT;
-    assignCoordinates(root, currentRootX, rootY);
-    currentRootX += root.subtreeWidth + FAMILY_GAP;
+    const rootLevel = isHorizontal
+      ? BASE_X + Math.max(0, root.generation - 1) * LEVEL_WIDTH_H
+      : BASE_Y + Math.max(0, root.generation - 1) * LEVEL_HEIGHT;
+    assignCoordinates(root, currentRootOrigin, rootLevel);
+    currentRootOrigin += root.subtreeWidth + familyGap;
   });
 
   // 5. Tạo danh sách React Flow Nodes
@@ -266,7 +309,7 @@ export function computeFamilyTreeLayout(
   const edges: Edge[] = [];
   const handledSpouseEdges = new Set<string>();
 
-  // A. Đường nối hôn phối ngang (Vợ và Chồng song song liền kề có biểu tượng ♥)
+  // A. Đường nối hôn phối (Vợ & Chồng song song)
   units.forEach((unit) => {
     if (unit.spouse) {
       const pairKey = [unit.primary.id, unit.spouse.id].sort().join("---");
@@ -280,8 +323,8 @@ export function computeFamilyTreeLayout(
           id: `edge-spouse-${leftNode.id}-${rightNode.id}`,
           source: leftNode.id,
           target: rightNode.id,
-          sourceHandle: "spouse-right",
-          targetHandle: "spouse-left",
+          sourceHandle: isHorizontal ? "spouse-bottom" : "spouse-right",
+          targetHandle: isHorizontal ? "spouse-top" : "spouse-left",
           type: "straight",
           style: {
             stroke: "#E11D48",
@@ -300,43 +343,74 @@ export function computeFamilyTreeLayout(
   });
 
   // B. Đường nối huyết thống trực giao dạng chữ T (Orthogonal Step Lines)
-  // Đâm từ giữa cặp cha mẹ xuống nhánh ngang rồi rẽ nhánh thẳng đứng vào từng người con của CHÍNH HỌ
   units.forEach((unit) => {
     if (unit.children.length === 0) return;
 
-    // Tọa độ xuất phát:
-    // Nếu có cả cha và mẹ: đâm từ chính giữa khoảng hở giữa 2 thẻ
-    // Nếu chỉ có đơn thân: đâm từ chính giữa đáy thẻ
-    const startX = unit.x + unit.stemOffset;
-    const startY = unit.y + NODE_HEIGHT;
+    if (isHorizontal) {
+      const startX = unit.x + NODE_WIDTH;
+      const startY = unit.y + unit.stemOffset;
+      const branchCoord = startX + (LEVEL_WIDTH_H - NODE_WIDTH) / 2;
 
-    // Nhánh ngang (branch level Y) nằm ở vị trí 50% khoảng cách giữa 2 đời
-    const branchY = startY + (LEVEL_HEIGHT - NODE_HEIGHT) / 2;
-
-    unit.children.forEach((childUnit) => {
-      const child = childUnit.primary;
-      edges.push({
-        id: `edge-lineage-${unit.primary.id}-${child.id}`,
-        source: unit.primary.id,
-        target: child.id,
-        type: "orthogonalBloodline",
-        data: {
-          startX,
-          startY,
-          branchY,
-        },
-        style: {
-          stroke: "#8B1D1D",
-          strokeWidth: 2,
-        },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: "#8B1D1D",
-          width: 12,
-          height: 12,
-        },
+      unit.children.forEach((childUnit) => {
+        const child = childUnit.primary;
+        edges.push({
+          id: `edge-lineage-${unit.primary.id}-${child.id}`,
+          source: unit.primary.id,
+          target: child.id,
+          sourceHandle: "bloodline-right",
+          targetHandle: "bloodline-left",
+          type: "orthogonalBloodline",
+          data: {
+            orientation: "horizontal",
+            startX,
+            startY,
+            branchCoord,
+          },
+          style: {
+            stroke: "#8B1D1D",
+            strokeWidth: 2,
+          },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: "#8B1D1D",
+            width: 12,
+            height: 12,
+          },
+        });
       });
-    });
+    } else {
+      const startX = unit.x + unit.stemOffset;
+      const startY = unit.y + NODE_HEIGHT;
+      const branchCoord = startY + (LEVEL_HEIGHT - NODE_HEIGHT) / 2;
+
+      unit.children.forEach((childUnit) => {
+        const child = childUnit.primary;
+        edges.push({
+          id: `edge-lineage-${unit.primary.id}-${child.id}`,
+          source: unit.primary.id,
+          target: child.id,
+          sourceHandle: "bloodline-bottom",
+          targetHandle: "bloodline-top",
+          type: "orthogonalBloodline",
+          data: {
+            orientation: "vertical",
+            startX,
+            startY,
+            branchCoord,
+          },
+          style: {
+            stroke: "#8B1D1D",
+            strokeWidth: 2,
+          },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: "#8B1D1D",
+            width: 12,
+            height: 12,
+          },
+        });
+      });
+    }
   });
 
   return { nodes, edges };

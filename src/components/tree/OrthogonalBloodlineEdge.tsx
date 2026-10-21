@@ -23,28 +23,51 @@ export default function OrthogonalBloodlineEdge({
     typeof (data as any)?.startX === "number" ? (data as any).startX : sourceX;
   const startY =
     typeof (data as any)?.startY === "number" ? (data as any).startY : sourceY;
-  const branchY =
-    typeof (data as any)?.branchY === "number"
+  const isHorizontal = (data as any)?.orientation === "horizontal";
+  const branchCoord =
+    typeof (data as any)?.branchCoord === "number"
+      ? (data as any).branchCoord
+      : typeof (data as any)?.branchY === "number"
       ? (data as any).branchY
+      : isHorizontal
+      ? (startX + targetX) / 2
       : (startY + targetY) / 2;
 
   let edgePath = "";
-  // Nếu chỉ có 1 con và nằm thẳng hàng bên dưới cha mẹ: vẽ đường thẳng đứng trực tiếp
-  if (Math.abs(startX - targetX) <= 4) {
-    edgePath = `M ${startX} ${startY} L ${targetX} ${targetY}`;
+  if (isHorizontal) {
+    if (Math.abs(startY - targetY) <= 4) {
+      edgePath = `M ${startX} ${startY} L ${targetX} ${targetY}`;
+    } else {
+      const [path] = getSmoothStepPath({
+        sourceX: startX,
+        sourceY: startY,
+        sourcePosition: Position.Right,
+        targetX,
+        targetY,
+        targetPosition: Position.Left,
+        borderRadius: 4,
+        centerX: branchCoord,
+      });
+      edgePath = path;
+    }
   } else {
-    // Đường chữ T vuông góc chuẩn mực đâm từ giữa cha mẹ xuống nhánh ngang rồi rẽ nhánh thẳng đứng vào từng con
-    const [path] = getSmoothStepPath({
-      sourceX: startX,
-      sourceY: startY,
-      sourcePosition: Position.Bottom,
-      targetX,
-      targetY,
-      targetPosition: Position.Top,
-      borderRadius: 4,
-      centerY: branchY,
-    });
-    edgePath = path;
+    // Nếu chỉ có 1 con và nằm thẳng hàng bên dưới cha mẹ: vẽ đường thẳng đứng trực tiếp
+    if (Math.abs(startX - targetX) <= 4) {
+      edgePath = `M ${startX} ${startY} L ${targetX} ${targetY}`;
+    } else {
+      // Đường chữ T vuông góc chuẩn mực đâm từ giữa cha mẹ xuống nhánh ngang rồi rẽ nhánh thẳng đứng vào từng con
+      const [path] = getSmoothStepPath({
+        sourceX: startX,
+        sourceY: startY,
+        sourcePosition: Position.Bottom,
+        targetX,
+        targetY,
+        targetPosition: Position.Top,
+        borderRadius: 4,
+        centerY: branchCoord,
+      });
+      edgePath = path;
+    }
   }
 
   return (
