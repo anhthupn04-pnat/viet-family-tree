@@ -37,6 +37,7 @@ import {
   Copy,
   Info,
   Landmark,
+  Home,
 } from "lucide-react";
 import { Member, Tree, SuggestionType } from "@/types/family";
 import FamilyNode from "@/components/tree/FamilyNode";
@@ -300,21 +301,30 @@ function PublicShareTreeContent() {
   // Error Screen
   if (error || !tree) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 text-slate-800">
-        <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 text-center space-y-4 border border-slate-200">
-          <div className="w-14 h-14 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto">
+      <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 text-white">
+        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl shadow-2xl max-w-md w-full p-8 text-center space-y-5 backdrop-blur-md">
+          <div className="w-16 h-16 bg-rose-500/10 border border-rose-500/30 text-rose-400 rounded-2xl flex items-center justify-center mx-auto">
             <AlertCircle className="w-8 h-8" />
           </div>
-          <h2 className="text-lg font-bold text-slate-900">Không Thể Truy Cập</h2>
-          <p className="text-xs text-slate-600 leading-relaxed">
-            {error || "Cây gia phả này không tồn tại hoặc chưa được kích hoạt chế độ xem công khai."}
-          </p>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-white tracking-tight">
+              Đường Dẫn Không Khả Dụng
+            </h2>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              {error ||
+                "Cây gia phả này không tồn tại hoặc liên kết chia sẻ đã hết hạn/bị thay đổi."}
+            </p>
+            <p className="text-[11px] text-slate-400">
+              Quý khách vui lòng quay về Cổng Trang Chủ Gia Phả Chung để tra cứu thông tin dòng họ hoặc chọn cây phả hệ khác.
+            </p>
+          </div>
           <button
             type="button"
             onClick={() => router.push("/")}
-            className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95"
           >
-            Về Trang Chủ
+            <Home className="w-4 h-4" />
+            <span>Quay Về Trang Chủ Gia Phả</span>
           </button>
         </div>
       </div>

@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import {
+  Home,
   Users,
   GitBranch,
   ShieldCheck,
@@ -104,6 +105,7 @@ export default function Header({
   };
 
   const navItems = [
+    { id: "home", label: "Trang Chủ", icon: Home },
     { id: "tree", label: "Sơ đồ Cây Phả Hệ", icon: GitBranch },
     { id: "members", label: "Danh Sách Thành Viên (Bảng)", icon: Users },
     { id: "anniversaries", label: "Lịch Lễ Giỗ & Sự Kiện", icon: Calendar },
@@ -216,7 +218,7 @@ export default function Header({
         {/* Brand & Multi-Tree Switcher */}
         <div className="flex items-center gap-3 shrink-0">
           <div
-            onClick={() => setActiveTab("tree")}
+            onClick={() => setActiveTab("home")}
             className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-sm hover:bg-blue-700 transition-colors cursor-pointer"
           >
             TP
@@ -225,7 +227,7 @@ export default function Header({
           <div className="relative" ref={treeDropdownRef}>
             <div className="flex items-center gap-2">
               <span
-                onClick={() => setActiveTab("tree")}
+                onClick={() => setActiveTab("home")}
                 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight cursor-pointer hover:text-blue-600 transition-colors"
               >
                 Gia Phả Số

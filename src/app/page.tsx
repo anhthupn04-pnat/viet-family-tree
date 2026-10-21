@@ -12,13 +12,15 @@ import KinshipCalculatorModal from "@/components/KinshipCalculatorModal";
 import QuickImportModal from "@/components/QuickImportModal";
 import AnniversariesView from "@/components/AnniversariesView";
 import LotusFooter from "@/components/LotusFooter";
+import ClanHomeView from "@/components/ClanHomeView";
+import DigitalLibraryModal from "@/components/DigitalLibraryModal";
 import { Member } from "@/types/family";
 import { FamilyStoreProvider, useFamilyStore } from "@/lib/family-store";
 import { CheckCircle2, X, Compass, Sparkles } from "lucide-react";
 
 function HomePageContent() {
   const { members, isAdmin, activeTree, bulkImportMembers } = useFamilyStore();
-  const [activeTab, setActiveTab] = useState<string>("tree");
+  const [activeTab, setActiveTab] = useState<string>("home");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -41,6 +43,7 @@ function HomePageContent() {
   // Other Modals
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showKinshipModal, setShowKinshipModal] = useState(false);
+  const [showDigitalLibraryModal, setShowDigitalLibraryModal] = useState(false);
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -113,6 +116,15 @@ function HomePageContent() {
 
       {/* Tab Contents */}
       <main className="flex-1 w-full">
+        {/* TAB 0: Trang Chủ Cổng Thông Tin Dòng Họ */}
+        {activeTab === "home" && (
+          <ClanHomeView
+            onSelectTab={setActiveTab}
+            onOpenLogin={() => setShowLoginModal(true)}
+            onOpenDigitalLibrary={() => setShowDigitalLibraryModal(true)}
+          />
+        )}
+
         {/* TAB 1: Sơ đồ Cây Phả Hệ (Tree View) */}
         {activeTab === "tree" && (
           <div className="w-full">
@@ -257,6 +269,13 @@ function HomePageContent() {
         isOpen={showKinshipModal}
         onClose={() => setShowKinshipModal(false)}
         preselectedAId={selectedMember?.id}
+      />
+
+      {/* 6. Digital Heritage Library Modal */}
+      <DigitalLibraryModal
+        isOpen={showDigitalLibraryModal}
+        onClose={() => setShowDigitalLibraryModal(false)}
+        tree={activeTree}
       />
     </div>
   );
