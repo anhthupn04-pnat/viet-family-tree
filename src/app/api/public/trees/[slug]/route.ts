@@ -213,12 +213,35 @@ export async function GET(
         },
       ];
 
+      // BƯỚC 1: Khởi tạo/cập nhật thông tin cơ bản của toàn bộ thành viên (bỏ quan hệ phụ thuộc để tránh Foreign Key Violation)
       for (const mData of defaultMembersData) {
+        const { fatherId, motherId, spouseId, ...baseData } = mData;
         await prisma.treeMember.upsert({
           where: { id: mData.id },
-          create: mData,
-          update: mData,
+          create: {
+            ...baseData,
+            fatherId: null,
+            motherId: null,
+            spouseId: null,
+          },
+          update: {
+            ...baseData,
+          },
         });
+      }
+
+      // BƯỚC 2: Cập nhật các liên kết phụ hệ, mẫu hệ và hôn phối khi toàn bộ ID đã chắc chắn tồn tại
+      for (const mData of defaultMembersData) {
+        if (mData.fatherId || mData.motherId || mData.spouseId) {
+          await prisma.treeMember.update({
+            where: { id: mData.id },
+            data: {
+              fatherId: mData.fatherId || null,
+              motherId: mData.motherId || null,
+              spouseId: mData.spouseId || null,
+            },
+          });
+        }
       }
 
       tree.members = await prisma.treeMember.findMany({

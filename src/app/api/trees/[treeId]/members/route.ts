@@ -110,6 +110,24 @@ export async function POST(
       );
     }
 
+    // Kiểm tra tính hợp lệ của fatherId, motherId, spouseId để tránh Foreign Key Violation
+    let validFatherId: string | null = null;
+    let validMotherId: string | null = null;
+    let validSpouseId: string | null = null;
+
+    if (fatherId && String(fatherId).trim()) {
+      const f = await prisma.treeMember.findUnique({ where: { id: String(fatherId).trim() } });
+      if (f && f.treeId === treeId) validFatherId = f.id;
+    }
+    if (motherId && String(motherId).trim()) {
+      const m = await prisma.treeMember.findUnique({ where: { id: String(motherId).trim() } });
+      if (m && m.treeId === treeId) validMotherId = m.id;
+    }
+    if (spouseId && String(spouseId).trim()) {
+      const s = await prisma.treeMember.findUnique({ where: { id: String(spouseId).trim() } });
+      if (s && s.treeId === treeId) validSpouseId = s.id;
+    }
+
     // Sử dụng transaction để tạo thành viên và ghép nối quan hệ hai chiều
     const newMember = await prisma.$transaction(async (tx) => {
       const created = await tx.treeMember.create({
@@ -127,9 +145,9 @@ export async function POST(
           deathLunar: deathLunar ? String(deathLunar).trim() : null,
           isAlive: Boolean(isAlive),
           avatarUrl: avatarUrl ? String(avatarUrl).trim() : null,
-          fatherId: fatherId ? String(fatherId).trim() : null,
-          motherId: motherId ? String(motherId).trim() : null,
-          spouseId: spouseId ? String(spouseId).trim() : null,
+          fatherId: validFatherId,
+          motherId: validMotherId,
+          spouseId: validSpouseId,
           phone: phone ? String(phone).trim() : null,
           address: address ? String(address).trim() : null,
           burialPlace: burialPlace ? String(burialPlace).trim() : null,

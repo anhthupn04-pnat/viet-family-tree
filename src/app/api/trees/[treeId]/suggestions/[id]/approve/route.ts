@@ -92,9 +92,11 @@ export async function PATCH(
         let parentGen = 1;
         let isFather = true;
 
+        let validParentId: string | null = null;
         if (parentId) {
           const parent = await tx.treeMember.findUnique({ where: { id: parentId } });
           if (parent) {
+            validParentId = parent.id;
             parentGen = parent.generation;
             isFather = parent.gender === "male";
           }
@@ -115,8 +117,8 @@ export async function PATCH(
             birthDate: dataObj.birthDate || null,
             deathDate: dataObj.deathDate || null,
             isAlive: dataObj.isAlive !== undefined ? Boolean(dataObj.isAlive) : true,
-            fatherId: isFather ? parentId : dataObj.fatherId || null,
-            motherId: !isFather ? parentId : dataObj.motherId || null,
+            fatherId: isFather ? validParentId : null,
+            motherId: !isFather ? validParentId : null,
             phone: dataObj.phone || null,
             address: dataObj.address || null,
             notes: dataObj.notes || `Được thêm từ đề xuất của ${suggestion.senderName}`,

@@ -138,7 +138,7 @@ export async function executeTreeImportTransaction(
           });
           updatedCount++;
         } else {
-          // Tạo mới
+          // Tạo mới bản ghi cơ bản trước (loại bỏ quan hệ để không bị lỗi thứ tự foreign key)
           await tx.treeMember.create({
             data: {
               id: item.id,
@@ -154,9 +154,9 @@ export async function executeTreeImportTransaction(
               deathLunar: item.deathLunar || null,
               isAlive: item.isAlive,
               avatarUrl: item.avatarUrl || null,
-              fatherId: item.fatherId || null,
-              motherId: item.motherId || null,
-              spouseId: item.spouseId || null,
+              fatherId: null,
+              motherId: null,
+              spouseId: null,
               phone: item.phone || null,
               address: item.address || null,
               burialPlace: item.burialPlace || null,
@@ -169,7 +169,21 @@ export async function executeTreeImportTransaction(
         }
       }
 
-      // 3.3. Cập nhật các liên kết đối xứng của thành viên cũ (nếu có)
+      // 3.3. Cập nhật liên kết huyết thống & hôn phối cho các thành viên mới tạo
+      for (const item of normalizedItems) {
+        if (!existingIdSet.has(item.id) && (item.fatherId || item.motherId || item.spouseId)) {
+          await tx.treeMember.update({
+            where: { id: item.id },
+            data: {
+              fatherId: item.fatherId || null,
+              motherId: item.motherId || null,
+              spouseId: item.spouseId || null,
+            },
+          });
+        }
+      }
+
+      // 3.4. Cập nhật các liên kết đối xứng của thành viên cũ (nếu có)
       for (const [existingId, updates] of existingUpdates.entries()) {
         await tx.treeMember.update({
           where: { id: existingId },
