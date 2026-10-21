@@ -4,21 +4,29 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 /**
- * POST /api/public/trees/:treeId/suggestions
+ * POST /api/public/trees/:slug/suggestions
  * Gửi đề xuất đóng góp thông tin phả hệ từ thành viên/khách vãng lai (Crowdsourcing).
+ * Hỗ trợ tham số :slug là ID, shareSlug hoặc slug của cây gia phả.
  * - Lưu vào hàng đợi MemberSuggestion với trạng thái PENDING.
  * - Không ảnh hưởng trực tiếp đến cây gia phả cho đến khi Ban Trị Sự duyệt.
  */
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ treeId: string }> }
+  { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    const { treeId } = await params;
+    const { slug } = await params;
+    const cleanSlug = decodeURIComponent(slug).trim().toLowerCase();
 
-    // Kiểm tra cây tồn tại
-    const tree = await prisma.tree.findUnique({
-      where: { id: treeId },
+    // Kiểm tra cây tồn tại qua id, shareSlug hoặc slug
+    const tree = await prisma.tree.findFirst({
+      where: {
+        OR: [
+          { id: slug },
+          { shareSlug: cleanSlug },
+          { slug: cleanSlug },
+        ],
+      },
     });
 
     if (!tree) {
@@ -55,7 +63,7 @@ export async function POST(
     // Tạo bản ghi đề xuất
     const suggestion = await prisma.memberSuggestion.create({
       data: {
-        treeId,
+        treeId: tree.id,
         targetMemberId: targetMemberId ? String(targetMemberId).trim() : null,
         senderName: senderName.trim(),
         senderPhone: senderPhone ? String(senderPhone).trim() : null,
@@ -67,11 +75,11 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      message: "Gửi đề xuất thành công! Ban Trị Sự sẽ kiểm duyệt và đối soát trước khi cập nhật lên phả hệ.",
+      message: "Đề xuất của bạn đã được gửi thành công đến Ban Trị Sự để kiểm duyệt.",
       suggestionId: suggestion.id,
     });
   } catch (error: any) {
-    console.error("POST /api/public/trees/:treeId/suggestions error:", error);
+    console.error("POST /api/public/trees/:slug/suggestions error:", error);
     return NextResponse.json(
       { error: "Lỗi hệ thống khi gửi đề xuất: " + error.message },
       { status: 500 }
