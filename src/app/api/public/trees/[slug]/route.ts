@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { maskMemberListForPrivacy } from "@/lib/treePrivacy";
 import {
   ensureDefaultTreeAndMembers,
   seedMembersForTree,
@@ -184,7 +185,9 @@ export async function GET(
       }
     }
 
-    // 7. Trả về đúng 100% dữ liệu gốc của cây gia phả, không làm sai lệch hay che mờ thông tin
+    // 7. Bảo mật & Ẩn thông tin nhạy cảm (Privacy Mode): Làm mờ SĐT và địa chỉ chi tiết của người còn sống
+    const maskedMembers = maskMemberListForPrivacy(tree.members as any, false);
+
     return NextResponse.json({
       requirePassword: false,
       tree: {
@@ -199,7 +202,7 @@ export async function GET(
         createdAt: tree.createdAt.toISOString(),
         memberCount: tree.members.length,
       },
-      members: tree.members,
+      members: maskedMembers,
     });
   } catch (error: any) {
     console.error("GET /api/public/trees/:slug error:", error);
