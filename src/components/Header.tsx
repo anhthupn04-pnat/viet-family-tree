@@ -14,7 +14,7 @@ import {
   Compass,
   Search,
   X,
-  RotateCcw,
+  CheckCircle2,
   Sparkles,
   Bell,
 } from "lucide-react";
@@ -38,7 +38,6 @@ export default function Header({
 }: HeaderProps) {
   const {
     members,
-    resetToSeedData,
     isAdmin,
     currentAdmin,
     logoutAdmin,
@@ -120,24 +119,14 @@ export default function Header({
 
           {/* Quick Actions & Role Switcher */}
           <div className="flex items-center gap-2.5">
-            {/* Reset to Seed Data */}
-            <button
-              type="button"
-              onClick={() => {
-                if (
-                  confirm(
-                    "Bạn có chắc muốn khôi phục dữ liệu gốc Đời 1 (Cụ Phan Thạnh & Trần Thị Hoàng) và Đời 2 (9 người con) cùng các sự kiện mẫu?"
-                  )
-                ) {
-                  resetToSeedData();
-                }
-              }}
-              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors border border-slate-700 cursor-pointer active:scale-95"
-              title="Khôi phục lại dữ liệu ban đầu Đời 1 và 9 người con Đời 2"
+            {/* Safe Data Status Indicator */}
+            <div
+              className="flex items-center gap-1.5 bg-emerald-950/70 text-emerald-300 px-2.5 py-1 rounded-lg text-[11px] font-medium border border-emerald-800/80 shadow-xs"
+              title="Dữ liệu gia phả được lưu trữ an toàn liên tục"
             >
-              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-              <span>Khôi phục gốc (Đời 1 & 9 con)</span>
-            </button>
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span>Đã lưu an toàn ({members.length} người)</span>
+            </div>
 
             {/* Notification Bell (for Admin or general pending queue) */}
             {isAdmin && (

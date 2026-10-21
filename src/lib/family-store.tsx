@@ -338,6 +338,7 @@ export const ROOT_SEED_PENDING: PendingSubmission[] = [
 ];
 
 const STORAGE_MEMBERS = "phan_family_members_v3";
+const STORAGE_MEMBERS_LEGACY = "viet_family_tree_members_v2";
 const STORAGE_PENDING = "phan_family_pending_v2";
 const STORAGE_EVENTS = "phan_family_events_v2";
 const STORAGE_ADMINS = "phan_family_admins_v2";
@@ -378,6 +379,7 @@ interface FamilyStoreContextType {
   getChildren: (parentId: string) => Member[];
   getSpouse: (memberId: string) => Member | undefined;
   resetToSeedData: () => void;
+  saveCurrentData: () => void;
   refreshTrigger: number;
 }
 
@@ -394,15 +396,20 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
   // Load from localStorage on mount
   useEffect(() => {
     try {
-      // 1. Members
-      const storedMembers = localStorage.getItem(STORAGE_MEMBERS);
+      // 1. Members (Kiểm tra cả 2 khóa để bảo toàn 100% dữ liệu đã nhập)
+      const storedMembers =
+        localStorage.getItem(STORAGE_MEMBERS) ||
+        localStorage.getItem(STORAGE_MEMBERS_LEGACY);
       if (storedMembers) {
         const parsed = JSON.parse(storedMembers);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setMembers(parsed);
+          localStorage.setItem(STORAGE_MEMBERS, JSON.stringify(parsed));
+          localStorage.setItem(STORAGE_MEMBERS_LEGACY, JSON.stringify(parsed));
         }
       } else {
         localStorage.setItem(STORAGE_MEMBERS, JSON.stringify(ROOT_SEED_MEMBERS));
+        localStorage.setItem(STORAGE_MEMBERS_LEGACY, JSON.stringify(ROOT_SEED_MEMBERS));
       }
 
       // 2. Pending Submissions
@@ -577,7 +584,9 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
         );
       }
       try {
-        localStorage.setItem(STORAGE_MEMBERS, JSON.stringify(updated));
+        const jsonStr = JSON.stringify(updated);
+        localStorage.setItem(STORAGE_MEMBERS, jsonStr);
+        localStorage.setItem(STORAGE_MEMBERS_LEGACY, jsonStr);
       } catch (e) {
         console.error(e);
       }
@@ -615,7 +624,9 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
       }
 
       try {
-        localStorage.setItem(STORAGE_MEMBERS, JSON.stringify(updated));
+        const jsonStr = JSON.stringify(updated);
+        localStorage.setItem(STORAGE_MEMBERS, jsonStr);
+        localStorage.setItem(STORAGE_MEMBERS_LEGACY, jsonStr);
       } catch (e) {
         console.error(e);
       }
@@ -638,7 +649,9 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
         }));
 
       try {
-        localStorage.setItem(STORAGE_MEMBERS, JSON.stringify(updated));
+        const jsonStr = JSON.stringify(updated);
+        localStorage.setItem(STORAGE_MEMBERS, jsonStr);
+        localStorage.setItem(STORAGE_MEMBERS_LEGACY, jsonStr);
       } catch (e) {
         console.error(e);
       }
@@ -720,22 +733,22 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
     setRefreshTrigger((prev) => prev + 1);
   }, []);
 
-  // Reset to seed data
+  // Reset to seed data (Đã tắt hoàn toàn theo yêu cầu người dùng để bảo vệ dữ liệu hiện có)
   const resetToSeedData = useCallback(() => {
-    try {
-      localStorage.setItem(STORAGE_MEMBERS, JSON.stringify(ROOT_SEED_MEMBERS));
-      localStorage.setItem(STORAGE_PENDING, JSON.stringify(ROOT_SEED_PENDING));
-      localStorage.setItem(STORAGE_EVENTS, JSON.stringify(ROOT_SEED_EVENTS));
-      localStorage.setItem(STORAGE_ADMINS, JSON.stringify(ROOT_SEED_ADMINS));
-    } catch (e) {
-      console.error(e);
-    }
-    setMembers(ROOT_SEED_MEMBERS);
-    setPendingSubmissions(ROOT_SEED_PENDING);
-    setEvents(ROOT_SEED_EVENTS);
-    setAdminUsers(ROOT_SEED_ADMINS);
-    setRefreshTrigger((prev) => prev + 1);
+    console.warn("Chế độ khôi phục gốc đã được vô hiệu hóa để bảo vệ an toàn cho dữ liệu hiện có.");
   }, []);
+
+  // Lưu dữ liệu hiện tại ngay lập tức vào bộ nhớ bền vững (Local Persistence)
+  const saveCurrentData = useCallback(() => {
+    try {
+      const jsonStr = JSON.stringify(members);
+      localStorage.setItem(STORAGE_MEMBERS, jsonStr);
+      localStorage.setItem(STORAGE_MEMBERS_LEGACY, jsonStr);
+      setRefreshTrigger((prev) => prev + 1);
+    } catch (e) {
+      console.error("Lỗi lưu dữ liệu:", e);
+    }
+  }, [members]);
 
   const getMember = useCallback(
     (id: string) => {
@@ -787,6 +800,7 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
         getChildren,
         getSpouse,
         resetToSeedData,
+        saveCurrentData,
         refreshTrigger,
       }}
     >

@@ -4,20 +4,14 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('--- Đang khởi tạo dữ liệu mẫu Gia phả dòng họ (1 - 2 Đời chuẩn) ---');
+  // Kiểm tra nếu đã có dữ liệu thì bảo toàn toàn bộ dữ liệu hiện có, không xóa
+  const existingCount = await prisma.memberProfile.count();
+  if (existingCount > 0) {
+    console.log(`✓ Đã có ${existingCount} thành viên trong Database. Bảo lưu toàn bộ dữ liệu hiện có, không khôi phục gốc.`);
+    return;
+  }
 
-  // Xóa dữ liệu cũ nếu có
-  await prisma.auditLog.deleteMany();
-  await prisma.changeRequest.deleteMany();
-  await prisma.clanFund.deleteMany();
-  await prisma.clanDocument.deleteMany();
-  await prisma.clanEvent.deleteMany();
-  await prisma.ancestorAnniversary.deleteMany();
-  await prisma.marriage.deleteMany();
-  await prisma.memberProfile.deleteMany();
-  await prisma.clanBranch.deleteMany();
-  await prisma.clan.deleteMany();
-  await prisma.user.deleteMany();
+  console.log('--- Chưa có dữ liệu, đang khởi tạo dữ liệu mẫu Gia phả dòng họ ban đầu ---');
 
   // 1. Tạo tài khoản Admin bắt buộc: anhthuphan0102@gmail.com / 010204
   const adminSalt = await bcrypt.genSalt(10);

@@ -5,6 +5,7 @@
  * ngay cả khi chạy trên Vercel Serverless (không có database persistent) hoặc khi F5 tải lại trang.
  */
 
+const STORAGE_PRIMARY_KEY = "phan_family_members_v3";
 const STORAGE_KEY_MEMBERS = "viet_family_tree_members_v2";
 const STORAGE_KEY_DELETED_IDS = "viet_family_tree_deleted_ids_v2";
 const STORAGE_KEY_EDITED_MAP = "viet_family_tree_edited_map_v2";
@@ -14,7 +15,9 @@ const STORAGE_KEY_BRANCHES = "viet_family_tree_branches_v2";
 export function getLocalMembers(): any[] | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_MEMBERS);
+    const raw =
+      localStorage.getItem(STORAGE_PRIMARY_KEY) ||
+      localStorage.getItem(STORAGE_KEY_MEMBERS);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
@@ -26,7 +29,9 @@ export function getLocalMembers(): any[] | null {
 export function saveLocalMembers(members: any[]): void {
   if (typeof window === "undefined" || !Array.isArray(members)) return;
   try {
-    localStorage.setItem(STORAGE_KEY_MEMBERS, JSON.stringify(members));
+    const jsonStr = JSON.stringify(members);
+    localStorage.setItem(STORAGE_PRIMARY_KEY, jsonStr);
+    localStorage.setItem(STORAGE_KEY_MEMBERS, jsonStr);
   } catch (e) {
     console.warn("Lưu localStorage lỗi:", e);
   }
@@ -145,12 +150,8 @@ export function mergeServerWithLocal(serverMembers: any[]): any[] {
 }
 
 export function resetLocalDataToDefault(): void {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(STORAGE_KEY_MEMBERS);
-  localStorage.removeItem(STORAGE_KEY_DELETED_IDS);
-  localStorage.removeItem(STORAGE_KEY_EDITED_MAP);
-  localStorage.removeItem(STORAGE_KEY_CLAN);
-  localStorage.removeItem(STORAGE_KEY_BRANCHES);
+  // Chế độ khôi phục gốc đã tắt hoàn toàn để bảo vệ dữ liệu hiện có
+  console.log("Chế độ khôi phục gốc đã tắt. Bảo toàn toàn bộ dữ liệu hiện có.");
 }
 
 export function getLocalClan(): any | null {

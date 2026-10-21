@@ -15,7 +15,8 @@ import {
 import {
   Search,
   PlusCircle,
-  RotateCcw,
+  Save,
+  CheckCircle2,
   ZoomIn,
   ZoomOut,
   Maximize2,
@@ -52,8 +53,33 @@ function FamilyTreeCanvasInner({
   onOpenAddMember,
   focusedMemberId,
 }: FamilyTreeCanvasProps) {
-  const { members, resetToSeedData, refreshTrigger } = useFamilyStore();
+  const { members, saveCurrentData, refreshTrigger } = useFamilyStore();
   const { fitView, setCenter } = useReactFlow();
+
+  const handleSaveAndBackup = () => {
+    try {
+      saveCurrentData();
+      const dataStr =
+        "data:text/json;charset=utf-8," +
+        encodeURIComponent(JSON.stringify(members, null, 2));
+      const downloadAnchor = document.createElement("a");
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute(
+        "download",
+        `gia_pha_du_lieu_${new Date().toISOString().slice(0, 10)}.json`
+      );
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      alert(
+        `Đã lưu an toàn toàn bộ ${members.length} thành viên vào hệ thống và tải file sao lưu về máy!`
+      );
+    } catch (e) {
+      console.error(e);
+      saveCurrentData();
+      alert("Đã lưu an toàn dữ liệu gia phả!");
+    }
+  };
 
   const [search, setSearch] = useState("");
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
@@ -196,23 +222,15 @@ function FamilyTreeCanvasInner({
             <span>Căn Giữa Cây</span>
           </button>
 
-          {/* Reset button */}
+          {/* Save & Backup button */}
           <button
             type="button"
-            onClick={() => {
-              if (
-                confirm(
-                  "Khôi phục lại dữ liệu mẫu gốc (Cụ Phan Thạnh, Cụ Trần Thị Hoàng và 9 người con Đời 2)?"
-                )
-              ) {
-                resetToSeedData();
-              }
-            }}
-            className="px-3 py-1.5 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-            title="Khôi phục dữ liệu ban đầu"
+            onClick={handleSaveAndBackup}
+            className="px-3 py-1.5 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95"
+            title="Lưu dữ liệu hiện có và tải file sao lưu JSON về máy"
           >
-            <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-            <span className="hidden sm:inline">Khôi Phục Gốc</span>
+            <Save className="w-3.5 h-3.5 text-emerald-600" />
+            <span className="hidden sm:inline">Lưu Dữ Liệu ({members.length})</span>
           </button>
 
           {/* Primary Add button */}
