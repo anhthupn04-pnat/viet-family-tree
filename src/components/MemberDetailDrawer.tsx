@@ -74,15 +74,22 @@ export default function MemberDetailDrawer({
   const handleDeleteClick = () => {
     if (!member) return;
     if (isAdmin) {
-      if (
-        confirm(
+      if (children.length > 0) {
+        const childNames = children.map((c) => c.fullName).join(", ");
+        const confirmed = confirm(
+          `⚠️ CẢNH BÁO NÚT GỐC PHẢ HỆ:\n\nThành viên "${member.fullName}" đang là nút gốc nối các thế hệ sau (${children.length} người con/cháu: ${childNames}).\n\nViệc xóa thành viên này sẽ làm mất liên kết cha/mẹ của toàn bộ nhánh con cháu này!\n\nBạn có chắc chắn muốn xóa không?`
+        );
+        if (!confirmed) return;
+      } else {
+        const confirmed = confirm(
           `[ADMIN XÁC NHẬN] Bạn có chắc chắn muốn xóa thành viên "${member.fullName}" khỏi sơ đồ gia phả trực tiếp?`
-        )
-      ) {
-        deleteMemberDirect(member.id);
-        onClose();
-        onShowToast(`Đã xóa thành viên "${member.fullName}" thành công.`);
+        );
+        if (!confirmed) return;
       }
+
+      deleteMemberDirect(member.id);
+      onClose();
+      onShowToast(`Đã xóa thành viên "${member.fullName}" thành công.`);
     }
   };
 
@@ -126,6 +133,11 @@ export default function MemberDetailDrawer({
                   {member.orderInFamily && (
                     <span className="inline-block bg-white/20 text-white text-[10px] font-semibold px-2 py-0.5 rounded shadow-2xs">
                       Con thứ {member.orderInFamily}
+                    </span>
+                  )}
+                  {member.titles && (
+                    <span className="inline-block bg-amber-400 text-amber-950 font-bold text-[10px] px-2 py-0.5 rounded shadow-2xs">
+                      {member.titles}
                     </span>
                   )}
                 </div>
@@ -227,25 +239,54 @@ export default function MemberDetailDrawer({
               </div>
             </div>
 
-            {/* 2. Thời gian sinh - tử */}
+            {/* 2. Thời gian sinh - tử (Dương lịch & Âm lịch) & Mộ phần */}
             <div className="space-y-1.5 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
               <h4 className="font-bold text-slate-900 flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                <span>Thời Gian Sinh & Ngày Mất</span>
+                <span>Thời Gian Sinh, Ngày Mất & Mộ Phần</span>
               </h4>
               <p className="flex justify-between">
-                <span className="text-slate-500">Ngày sinh:</span>
+                <span className="text-slate-500">Ngày sinh (Dương lịch):</span>
                 <span className="font-medium text-slate-800">
                   {member.birthDate || "Chưa cập nhật"}
                 </span>
               </p>
-              {!member.isAlive && (
-                <p className="flex justify-between text-amber-900">
-                  <span className="text-slate-500">Ngày mất (Giỗ):</span>
-                  <span className="font-semibold">
-                    {member.deathDate || "Chưa cập nhật"}
+              {member.birthLunar && (
+                <p className="flex justify-between">
+                  <span className="text-slate-500">Ngày sinh (Âm lịch):</span>
+                  <span className="font-medium text-slate-700">
+                    {member.birthLunar}
                   </span>
                 </p>
+              )}
+              {!member.isAlive && (
+                <>
+                  <p className="flex justify-between text-amber-900">
+                    <span className="text-slate-500">Ngày mất (Dương lịch):</span>
+                    <span className="font-semibold">
+                      {member.deathDate || "Chưa cập nhật"}
+                    </span>
+                  </p>
+                  {member.deathLunar && (
+                    <p className="flex justify-between text-amber-900">
+                      <span className="text-slate-500">Ngày mất / Giỗ (Âm lịch):</span>
+                      <span className="font-bold text-amber-900">
+                        {member.deathLunar}
+                      </span>
+                    </p>
+                  )}
+                  {member.burialPlace && (
+                    <div className="pt-1 border-t border-slate-200 flex items-start justify-between">
+                      <span className="text-slate-500 shrink-0 mr-2 flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-emerald-600" />
+                        <span>Mộ phần / Nơi an táng:</span>
+                      </span>
+                      <span className="text-right font-medium text-emerald-800">
+                        {member.burialPlace}
+                      </span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
@@ -310,15 +351,22 @@ export default function MemberDetailDrawer({
             )}
 
             {/* 5. Ghi chú & Tiểu sử */}
-            {member.notes && (
-              <div className="space-y-1.5 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+            {(member.bio || member.notes) && (
+              <div className="space-y-2 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
                 <h4 className="font-bold text-slate-900 flex items-center gap-1.5">
                   <FileText className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Tiểu Sử & Nghề Nghiệp</span>
+                  <span>Tiểu Sử, Sự Nghiệp & Đóng Góp</span>
                 </h4>
-                <p className="text-slate-600 leading-relaxed whitespace-pre-line">
-                  {member.notes}
-                </p>
+                {member.bio && (
+                  <p className="text-slate-700 leading-relaxed whitespace-pre-line bg-white p-2.5 rounded-lg border border-slate-200">
+                    {member.bio}
+                  </p>
+                )}
+                {member.notes && member.notes !== member.bio && (
+                  <p className="text-slate-500 text-[11px] leading-relaxed italic whitespace-pre-line">
+                    Ghi chú: {member.notes}
+                  </p>
+                )}
               </div>
             )}
 

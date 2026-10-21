@@ -15,16 +15,20 @@ export async function GET(request: Request) {
     const user = await getAuthUserFromRequest(request);
 
     let whereClause: any = {};
-    if (!user || (user.role !== "SUPER_ADMIN" && !user.assignedTrees.includes("*"))) {
-      // Người dùng thường hoặc khách chỉ xem cây ACTIVE hoặc cây được phân quyền
-      if (user && user.assignedTrees.length > 0) {
-        whereClause = {
-          OR: [{ status: "ACTIVE" }, { id: { in: user.assignedTrees } }],
-        };
+    if (user) {
+      if (user.role === "SUPER_ADMIN" || user.assignedTrees.includes("*")) {
+        // Super Admin sees all trees
+        whereClause = {};
+      } else if (user.role === "TREE_MANAGER") {
+        // TREE_MANAGER: Chặn tuyệt đối truy cập chéo, CHỈ xem cây được chỉ định
+        whereClause = { id: { in: user.assignedTrees } };
       } else {
         whereClause = { status: "ACTIVE" };
       }
+    } else {
+      whereClause = { status: "ACTIVE" };
     }
+
 
     let trees = await prisma.tree.findMany({
       where: whereClause,

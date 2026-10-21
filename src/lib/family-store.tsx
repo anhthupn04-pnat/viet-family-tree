@@ -283,6 +283,7 @@ export const ROOT_SEED_ADMINS: AdminUser[] = [
     role: "super_admin",
     password: "010204",
     createdAt: "2026-01-01",
+    assignedTrees: ["*"],
   },
   {
     id: "admin-clan",
@@ -291,6 +292,7 @@ export const ROOT_SEED_ADMINS: AdminUser[] = [
     role: "admin",
     password: "admin123",
     createdAt: "2026-01-01",
+    assignedTrees: ["tree-phan-family"],
   },
 ];
 
@@ -399,6 +401,7 @@ interface FamilyStoreContextType {
 
   // Multi-Tree & RBAC System
   trees: Tree[];
+  allTrees: Tree[];
   activeTreeId: string;
   activeTree: Tree;
   setActiveTreeId: (id: string) => void;
@@ -562,57 +565,66 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
   }, []);
 
   // Chuyển đổi Cây Gia Phả đang hiển thị (Switch Tree)
-  const setActiveTreeId = useCallback((treeId: string) => {
-    setActiveTreeIdState(treeId);
-    try {
-      localStorage.setItem(STORAGE_ACTIVE_TREE, treeId);
-    } catch (e) {}
-
-    // Load thành viên tương ứng của cây này nếu có
-    if (treeId === "tree-phan-family") {
-      const stored = localStorage.getItem(STORAGE_MEMBERS);
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) setMembers(parsed);
-        } catch (e) {}
+  const setActiveTreeId = useCallback(
+    (treeId: string) => {
+      // Chặn can thiệp chéo đối với vai trò TREE_MANAGER
+      if (currentAdmin && currentAdmin.role !== "super_admin") {
+        const assigned = currentAdmin.assignedTrees || currentAdmin.assignedTreeIds || [];
+        const hasPermission = assigned.includes("*") || assigned.includes(treeId);
+        if (!hasPermission) {
+          alert("Truy cập bị từ chối (403): Bạn không có quyền quản lý gia phả này.");
+          return;
+        }
       }
-    } else {
-      const treeMembersKey = `tree_members_${treeId}`;
-      const stored = localStorage.getItem(treeMembersKey);
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) setMembers(parsed);
-        } catch (e) {}
+
+      setActiveTreeIdState(treeId);
+      try {
+        localStorage.setItem(STORAGE_ACTIVE_TREE, treeId);
+      } catch (e) {}
+
+      // Load thành viên tương ứng của cây này nếu có
+      if (treeId === "tree-phan-family") {
+        const stored = localStorage.getItem(STORAGE_MEMBERS);
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) setMembers(parsed);
+          } catch (e) {}
+        }
       } else {
-        // Tải từ API nếu có
-        fetch(`/api/trees/${treeId}`)
-          .then((res) => (res.ok ? res.json() : null))
-          .then((data) => {
-            if (data?.tree?.members && Array.isArray(data.tree.members)) {
-              setMembers(data.tree.members);
-            } else {
-              setMembers([]);
-            }
+        const treeMembersKey = `tree_members_${treeId}`;
+        const stored = localStorage.getItem(treeMembersKey);
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) setMembers(parsed);
+          } catch (e) {}
+        } else {
+          // Tải từ API nếu có
+          fetch(`/api/trees/${treeId}/members`, {
+            headers: {
+              "x-user-email": currentAdmin?.email || "anhthuphan0102@gmail.com",
+            },
           })
-          .catch(() => setMembers([]));
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+              if (data?.members && Array.isArray(data.members)) {
+                setMembers(data.members);
+              } else {
+                setMembers([]);
+              }
+            })
+            .catch(() => setMembers([]));
+        }
       }
-    }
-    setRefreshTrigger((prev) => prev + 1);
-  }, []);
-
-  const activeTree =
-    trees.find((t) => t.id === activeTreeId) ||
-    trees[0] ||
-    DEFAULT_TREES[0];
-
-  const pendingCount = pendingSubmissions.filter((s) => s.status === "pending").length;
-  const isAdmin = !!currentAdmin;
+      setRefreshTrigger((prev) => prev + 1);
+    },
+    [currentAdmin]
+  );
 
   // RBAC Permission Model:
   // - SUPER_ADMIN: Toàn quyền tạo cây, sửa cây, gán quyền, bulk import mọi nơi
-  // - TREE_MANAGER: Quản lý & bulk import trên các cây được gán (assignedTrees)
+  // - TREE_MANAGER: Quản lý & bulk import CHỈ trên các cây được gán (assignedTrees)
   // - VIEWER: Chỉ xem
   const userRole: UserSystemRole = currentAdmin
     ? currentAdmin.role === "super_admin"
@@ -622,13 +634,35 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
 
   const isSuperAdmin = userRole === "SUPER_ADMIN";
   const canCreateTree = isSuperAdmin;
+
+  // Scoped Access Control: Lọc cây theo quyền hạn nghiêm ngặt
+  const accessibleTrees = isSuperAdmin
+    ? trees
+    : userRole === "TREE_MANAGER"
+    ? trees.filter((t) => {
+        const assigned = currentAdmin?.assignedTrees || currentAdmin?.assignedTreeIds || [];
+        return assigned.includes("*") || assigned.includes(t.id);
+      })
+    : trees.filter((t) => t.status === "ACTIVE" && t.isPublic !== false);
+
+  const activeTree =
+    accessibleTrees.find((t) => t.id === activeTreeId) ||
+    accessibleTrees[0] ||
+    trees.find((t) => t.id === activeTreeId) ||
+    trees[0] ||
+    DEFAULT_TREES[0];
+
+  const pendingCount = pendingSubmissions.filter((s) => s.status === "pending").length;
+  const isAdmin = !!currentAdmin;
+
   const canManageCurrentTree =
     isSuperAdmin ||
     (userRole === "TREE_MANAGER" &&
-      (!currentAdmin?.assignedTrees ||
-        currentAdmin.assignedTrees.includes("*") ||
-        currentAdmin.assignedTrees.includes(activeTreeId) ||
-        activeTreeId === "tree-phan-family")); // Mặc định gán quyền cây demo cho Ban Trị Sự
+      Boolean(
+        currentAdmin?.assignedTrees?.includes("*") ||
+        (currentAdmin?.assignedTrees && currentAdmin.assignedTrees.includes(activeTreeId)) ||
+        (currentAdmin?.assignedTreeIds && currentAdmin.assignedTreeIds.includes(activeTreeId))
+      ));
 
   const canBulkImport = canManageCurrentTree;
 
@@ -654,9 +688,18 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
       } catch (e) {
         console.error(e);
       }
+
+      // Nếu là Tree Manager, tự động chọn cây được phân quyền đầu tiên
+      if (user.role !== "super_admin") {
+        const assigned = user.assignedTrees || user.assignedTreeIds || [];
+        if (assigned.length > 0 && !assigned.includes("*")) {
+          setActiveTreeId(assigned[0]);
+        }
+      }
+
       return { success: true };
     },
-    [adminUsers]
+    [adminUsers, setActiveTreeId]
   );
 
   // Auth: Logout
@@ -1144,8 +1187,9 @@ export function FamilyStoreProvider({ children }: { children: React.ReactNode })
         isSuperAdmin,
         pendingCount,
 
-        // Multi-Tree & RBAC
-        trees,
+        // Multi-Tree & RBAC (Chặt chẽ theo Scoped Access Control)
+        trees: accessibleTrees,
+        allTrees: trees,
         activeTreeId,
         activeTree,
         setActiveTreeId,

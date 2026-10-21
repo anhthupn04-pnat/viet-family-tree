@@ -55,8 +55,13 @@ export default function MemberFormModal({
   const [generation, setGeneration] = useState(2);
   const [orderInFamily, setOrderInFamily] = useState<number | "">("");
   const [birthDate, setBirthDate] = useState("");
+  const [birthLunar, setBirthLunar] = useState("");
   const [deathDate, setDeathDate] = useState("");
+  const [deathLunar, setDeathLunar] = useState("");
   const [isAlive, setIsAlive] = useState(true);
+  const [burialPlace, setBurialPlace] = useState("");
+  const [titles, setTitles] = useState("");
+  const [bio, setBio] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [fatherId, setFatherId] = useState("");
@@ -80,8 +85,13 @@ export default function MemberFormModal({
       setGeneration(editingMember.generation || 1);
       setOrderInFamily(editingMember.orderInFamily || "");
       setBirthDate(editingMember.birthDate || "");
+      setBirthLunar(editingMember.birthLunar || "");
       setDeathDate(editingMember.deathDate || "");
+      setDeathLunar(editingMember.deathLunar || "");
       setIsAlive(editingMember.isAlive !== undefined ? editingMember.isAlive : true);
+      setBurialPlace(editingMember.burialPlace || "");
+      setTitles(editingMember.titles || "");
+      setBio(editingMember.bio || "");
       setPhone(editingMember.phone || "");
       setAddress(editingMember.address || "");
       setFatherId(editingMember.fatherId || "");
@@ -93,8 +103,13 @@ export default function MemberFormModal({
       setFullName("");
       setNickname("");
       setBirthDate("");
+      setBirthLunar("");
       setDeathDate("");
+      setDeathLunar("");
       setIsAlive(true);
+      setBurialPlace("");
+      setTitles("");
+      setBio("");
       setPhone("");
       setAddress(target.address || "");
       setNotes("");
@@ -129,8 +144,13 @@ export default function MemberFormModal({
       setGeneration(2);
       setOrderInFamily("");
       setBirthDate("");
+      setBirthLunar("");
       setDeathDate("");
+      setDeathLunar("");
       setIsAlive(true);
+      setBurialPlace("");
+      setTitles("");
+      setBio("");
       setPhone("");
       setAddress("");
       setFatherId("");
@@ -156,8 +176,13 @@ export default function MemberFormModal({
       generation: Number(generation),
       orderInFamily: orderInFamily !== "" ? Number(orderInFamily) : undefined,
       birthDate: birthDate.trim() || undefined,
+      birthLunar: birthLunar.trim() || undefined,
       deathDate: !isAlive && deathDate.trim() ? deathDate.trim() : undefined,
+      deathLunar: !isAlive && deathLunar.trim() ? deathLunar.trim() : undefined,
       isAlive,
+      burialPlace: !isAlive && burialPlace.trim() ? burialPlace.trim() : undefined,
+      titles: titles.trim() || undefined,
+      bio: bio.trim() || undefined,
       phone: phone.trim() || undefined,
       address: address.trim() || undefined,
       fatherId: fatherId || undefined,
@@ -394,16 +419,16 @@ export default function MemberFormModal({
             </div>
           </div>
 
-          {/* Section 2: Sinh - Tử */}
+          {/* Section 2: Sinh - Tử (Cả Dương lịch & Âm lịch) */}
           <div className="space-y-3">
             <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] border-b pb-1">
-              2. Ngày Sinh & Tình Trạng
+              2. Ngày Sinh, Ngày Mất (Dương Lịch & Âm Lịch) & Mộ Phần
             </h4>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Ngày sinh (dd/mm/yyyy)
+                  Ngày sinh Dương lịch (dd/mm/yyyy)
                 </label>
                 <input
                   type="text"
@@ -416,51 +441,127 @@ export default function MemberFormModal({
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Tình trạng hiện tại
+                  Ngày sinh Âm lịch
                 </label>
-                <div className="flex items-center gap-4 mt-2">
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="isAlive"
-                      checked={isAlive}
-                      onChange={() => setIsAlive(true)}
-                    />
-                    <span>Còn sống</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="isAlive"
-                      checked={!isAlive}
-                      onChange={() => setIsAlive(false)}
-                    />
-                    <span>Đã mất (Khuất)</span>
-                  </label>
-                </div>
+                <input
+                  type="text"
+                  placeholder="Ví dụ: 12 tháng 4 năm Canh Thìn"
+                  value={birthLunar}
+                  onChange={(e) => setBirthLunar(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="pt-1">
+              <label className="block font-semibold text-slate-700 mb-1">
+                Tình trạng hiện tại
+              </label>
+              <div className="flex items-center gap-4 mt-1">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="isAlive"
+                    checked={isAlive}
+                    onChange={() => setIsAlive(true)}
+                  />
+                  <span className="font-medium text-emerald-700">Còn sống</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="isAlive"
+                    checked={!isAlive}
+                    onChange={() => setIsAlive(false)}
+                  />
+                  <span className="font-medium text-amber-700">Đã mất (Khuất)</span>
+                </label>
               </div>
             </div>
 
             {!isAlive && (
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Ngày mất / Ngày giỗ (dd/mm/yyyy)
-                </label>
-                <input
-                  type="text"
-                  placeholder="10/05/2010"
-                  value={deathDate}
-                  onChange={(e) => setDeathDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+              <div className="space-y-3 bg-amber-50/60 p-3 rounded-xl border border-amber-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Ngày mất Dương lịch (dd/mm/yyyy)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="10/05/2010"
+                      value={deathDate}
+                      onChange={(e) => setDeathDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Ngày mất / Ngày Giỗ Âm lịch
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ví dụ: Giỗ ngày 16 tháng 3 Âm lịch"
+                      value={deathLunar}
+                      onChange={(e) => setDeathLunar(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Nơi an táng / Vị trí Mộ phần
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ví dụ: Nghĩa trang dòng họ Phan, Đồi Cây Khế, Điện Bàn, Quảng Nam"
+                    value={burialPlace}
+                    onChange={(e) => setBurialPlace(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
             )}
           </div>
 
-          {/* Section 3: Liên hệ & Cư trú (Công khai) */}
+          {/* Section 3: Chức tước, Học vị & Tiểu sử */}
           <div className="space-y-3">
             <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] border-b pb-1">
-              3. Liên Hệ & Địa Chỉ Nơi Ở (Công Khai)
+              3. Chức Tước, Học Vị & Tiểu Sử Chi Tiết
+            </h4>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                Chức tước / Học vị / Danh hiệu
+              </label>
+              <input
+                type="text"
+                placeholder="Ví dụ: Cử nhân Nho học, Trưởng chi, Tiền hiền, Huân chương..."
+                value={titles}
+                onChange={(e) => setTitles(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                Tiểu sử / Công đức & Đóng góp
+              </label>
+              <textarea
+                rows={2}
+                placeholder="Tóm tắt cuộc đời, sự nghiệp, công đức đóng góp xây dựng từ đường, nhà thờ họ..."
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          {/* Section 4: Liên hệ & Cư trú (Công khai) */}
+          <div className="space-y-3">
+            <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] border-b pb-1">
+              4. Liên Hệ & Địa Chỉ Nơi Ở (Công Khai)
             </h4>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

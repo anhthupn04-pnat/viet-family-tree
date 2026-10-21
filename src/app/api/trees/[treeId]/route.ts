@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireSuperAdmin, requireTreePermission } from "@/lib/rbac";
+import { requireSuperAdmin, requireTreePermission, ensureTreeManagerAccess, getAuthUserFromRequest } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/trees/:treeId
  * Lấy chi tiết cây gia phả và danh sách thành viên của cây đó.
+ * BẢO MẬT: Chặn tuyệt đối can thiệp chéo giữa các gia phả cho vai trò TREE_MANAGER.
  */
 export async function GET(
   request: Request,
@@ -14,6 +15,16 @@ export async function GET(
 ) {
   try {
     const { treeId } = await params;
+
+    // Kiểm tra nếu là TREE_MANAGER thì phải có quyền trên treeId này
+    const authUser = await getAuthUserFromRequest(request);
+    if (authUser && authUser.role === "TREE_MANAGER") {
+      const accessCheck = await ensureTreeManagerAccess(request, treeId);
+      if (accessCheck instanceof NextResponse) {
+        return accessCheck;
+      }
+    }
+
 
     const tree = await prisma.tree.findUnique({
       where: { id: treeId },

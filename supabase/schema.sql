@@ -358,14 +358,58 @@ DROP POLICY IF EXISTS "Public can submit suggestion" ON public.member_suggestion
 CREATE POLICY "Public can submit suggestion" ON public.member_suggestions 
     FOR INSERT WITH CHECK (true);
 
--- 2. Quản lý đề xuất: Chỉ SuperAdmin hoặc TreeManager phụ trách tree_id
-DROP POLICY IF EXISTS "Managers view and review suggestions" ON public.member_suggestions;
-CREATE POLICY "Managers view and review suggestions" ON public.member_suggestions 
-    FOR ALL USING (
-        EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'SUPER_ADMIN') OR
-        EXISTS (
-            SELECT 1 FROM public.user_tree_roles 
-            WHERE user_id = auth.uid() AND tree_id = member_suggestions.tree_id AND role = 'TREE_MANAGER'
-        )
-    );
+ALTER TABLE public.tree_members ADD COLUMN IF NOT EXISTS birth_lunar TEXT;
+ALTER TABLE public.tree_members ADD COLUMN IF NOT EXISTS death_lunar TEXT;
+ALTER TABLE public.tree_members ADD COLUMN IF NOT EXISTS burial_place TEXT;
+ALTER TABLE public.tree_members ADD COLUMN IF NOT EXISTS titles TEXT;
+ALTER TABLE public.tree_members ADD COLUMN IF NOT EXISTS bio TEXT;
+
+-- =============================================================================
+-- 11. BẢNG HOẠT ĐỘNG DÒNG HỌ THEO CÂY (FAMILY OPERATIONS)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS public.tree_anniversaries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tree_id UUID NOT NULL REFERENCES public.trees(id) ON DELETE CASCADE,
+    member_id TEXT,
+    title TEXT NOT NULL,
+    lunar_day INT NOT NULL,
+    lunar_month INT NOT NULL,
+    is_leap_month BOOLEAN NOT NULL DEFAULT false,
+    solar_date TEXT,
+    location TEXT,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.tree_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tree_id UUID NOT NULL REFERENCES public.trees(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'NEWS',
+    content TEXT NOT NULL,
+    event_date TEXT,
+    location TEXT,
+    is_public BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.tree_funds (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tree_id UUID NOT NULL REFERENCES public.trees(id) ON DELETE CASCADE,
+    type TEXT NOT NULL DEFAULT 'INCOME' CHECK (type IN ('INCOME', 'EXPENSE')),
+    amount NUMERIC(15, 2) NOT NULL,
+    title TEXT NOT NULL,
+    contributor_or_recipient TEXT NOT NULL,
+    date TEXT NOT NULL,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tree_anniversaries_tree ON public.tree_anniversaries(tree_id);
+CREATE INDEX IF NOT EXISTS idx_tree_events_tree ON public.tree_events(tree_id);
+CREATE INDEX IF NOT EXISTS idx_tree_funds_tree ON public.tree_funds(tree_id);
+
 

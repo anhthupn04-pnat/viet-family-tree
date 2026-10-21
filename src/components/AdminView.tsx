@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { PendingSubmission, AdminUser, Tree } from "@/types/family";
 import { useFamilyStore } from "@/lib/family-store";
+import FamilyOperationsView from "./FamilyOperationsView";
 
 interface AdminViewProps {
   onNavigateTab: (tab: string) => void;
@@ -67,7 +68,14 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
     getMember,
   } = useFamilyStore();
 
-  const [activeTab, setActiveTab] = useState<"queue" | "trees" | "rbac" | "stats">("queue");
+  const [activeTab, setActiveTab] = useState<"queue" | "trees" | "operations" | "rbac" | "stats">("queue");
+
+  // Chặn Tree Manager truy cập tab cấu hình hệ thống RBAC
+  useEffect(() => {
+    if (activeTab === "rbac" && !isSuperAdmin) {
+      setActiveTab("queue");
+    }
+  }, [activeTab, isSuperAdmin]);
   const [queueFilter, setQueueFilter] = useState<"all" | "pending" | "approved" | "rejected">(
     "pending"
   );
@@ -445,21 +453,36 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
             }`}
           >
             <FolderTree className="w-3.5 h-3.5" />
-            <span>Cây Gia Phả ({trees.length})</span>
+            <span>{isSuperAdmin ? `Cây Gia Phả (${trees.length})` : `Gia Phả Của Tôi (${trees.length})`}</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveTab("rbac")}
+            onClick={() => setActiveTab("operations")}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-              activeTab === "rbac"
+              activeTab === "operations"
                 ? "bg-white text-blue-600 shadow-xs"
                 : "text-slate-600 hover:text-slate-900"
             }`}
           >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Phân Quyền RBAC ({adminUsers.length})</span>
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Hoạt Động Dòng Họ</span>
           </button>
+
+          {isSuperAdmin && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("rbac")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                activeTab === "rbac"
+                  ? "bg-white text-blue-600 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Phân Quyền RBAC ({adminUsers.length})</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -1254,10 +1277,16 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
             <div>
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <FolderTree className="w-5 h-5 text-blue-600" />
-                <span>Quản Lý Danh Sách Cây Gia Phả Hệ Thống</span>
+                <span>
+                  {isSuperAdmin
+                    ? "Quản Lý Danh Sách Cây Gia Phả Hệ Thống"
+                    : "Danh Sách Gia Phả Của Tôi (Được Gán Quản Lý)"}
+                </span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Chỉ <strong>Super Admin</strong> mới có quyền tạo cây gia phả mới. Quản lý trạng thái, phân công phụ trách và chuyển đổi nhanh giữa các nhánh tộc.
+                {isSuperAdmin
+                  ? "Chỉ Super Admin mới có quyền tạo cây gia phả mới và xóa cây gia phả. Quản lý trạng thái, phân công phụ trách và chuyển đổi nhanh giữa các nhánh tộc."
+                  : "Bạn chỉ có quyền xem và quản trị các cây gia phả được Super Admin phân công cụ thể qua UserTreeRole. Hệ thống chặn tuyệt đối can thiệp chéo."}
               </p>
             </div>
 
@@ -1403,8 +1432,16 @@ export default function AdminView({ onNavigateTab, onOpenAddMember }: AdminViewP
         </div>
       )}
 
-      {/* TAB 3: PHÂN QUYỀN HỆ THỐNG (RBAC) */}
-      {activeTab === "rbac" && (
+      {/* TAB: HOẠT ĐỘNG DÒNG HỌ (FAMILY OPERATIONS) */}
+      {activeTab === "operations" && (
+        <FamilyOperationsView
+          treeId={activeTreeId}
+          treeName={trees.find((t) => t.id === activeTreeId)?.name || "Gia Phả"}
+        />
+      )}
+
+      {/* TAB 3: PHÂN QUYỀN HỆ THỐNG (RBAC) - CHỈ SUPER ADMIN */}
+      {activeTab === "rbac" && isSuperAdmin && (
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <div>

@@ -140,6 +140,104 @@ export async function requireSuperAdmin(
 }
 
 /**
+ * Middleware Guard: Logic kiểm tra quyền hạn nghiêm ngặt theo từng Request cho vai trò TREE_MANAGER.
+ * Đảm bảo quản lý theo từng cây gia phả cụ thể và CHẶN TUYỆT ĐỐI việc can thiệp chéo giữa các gia phả.
+ * - Super Admin: Toàn quyền truy cập mọi cây.
+ * - TREE_MANAGER: Bắt buộc phải có bản ghi UserTreeRole với role 'TREE_MANAGER' trên treeId này.
+ * - 403 Forbidden nếu không có quyền.
+ */
+export async function ensureTreeManagerAccess(
+  request: Request,
+  treeId: string
+): Promise<{ user: AuthenticatedUser } | NextResponse> {
+  const user = await getAuthUserFromRequest(request);
+
+  if (!user) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Yêu cầu xác thực tài khoản. Vui lòng đăng nhập.",
+      },
+      { status: 401 }
+    );
+  }
+
+  // 1. Super Admin luôn có toàn quyền
+  if (user.role === "SUPER_ADMIN" || user.assignedTrees.includes("*")) {
+    return { user };
+  }
+
+  // 2. Tra cứu cơ sở dữ liệu UserTreeRole
+  try {
+    const permission = await prisma.userTreeRole.findFirst({
+      where: {
+        userId: user.id,
+        treeId: treeId,
+        role: "TREE_MANAGER",
+      },
+    });
+
+    if (permission || user.assignedTrees.includes(treeId)) {
+      return { user };
+    }
+  } catch (err) {
+    console.warn("Lỗi kiểm tra quyền UserTreeRole:", err);
+    if (user.assignedTrees.includes(treeId)) {
+      return { user };
+    }
+  }
+
+  // 3. Tuyệt đối cấm can thiệp chéo
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Truy cập bị từ chối: Bạn không có quyền quản lý gia phả này.",
+    },
+    { status: 403 }
+  );
+}
+
+/**
+ * Express / Node.js style Middleware: ensureTreeManagerAccess
+ */
+export async function ensureTreeManagerAccessExpress(req: any, res: any, next: any) {
+  const treeId = req.params?.treeId || req.query?.treeId;
+  const userId = req.user?.id;
+
+  if (req.user?.isSuperAdmin || req.user?.role === "SUPER_ADMIN") return next();
+
+  if (!userId || !treeId) {
+    return res.status(403).json({
+      success: false,
+      error: "Truy cập bị từ chối: Bạn không có quyền quản lý gia phả này.",
+    });
+  }
+
+  try {
+    const permission = await prisma.userTreeRole.findFirst({
+      where: {
+        userId: userId,
+        treeId: treeId,
+        role: "TREE_MANAGER",
+      },
+    });
+
+    if (!permission) {
+      return res.status(403).json({
+        success: false,
+        error: "Truy cập bị từ chối: Bạn không có quyền quản lý gia phả này.",
+      });
+    }
+    next();
+  } catch (e: any) {
+    return res.status(500).json({
+      success: false,
+      error: "Lỗi xác thực quyền: " + e.message,
+    });
+  }
+}
+
+/**
  * Middleware Guard: Kiểm tra quyền trên Cây Gia Phả cụ thể
  * - SUPER_ADMIN: Toàn quyền trên mọi cây
  * - TREE_MANAGER: Phải được phân quyền rõ ràng trên treeId này
@@ -150,6 +248,10 @@ export async function requireTreePermission(
   treeId: string,
   minRole: "VIEWER" | "TREE_MANAGER" = "TREE_MANAGER"
 ): Promise<{ user: AuthenticatedUser } | NextResponse> {
+  if (minRole === "TREE_MANAGER") {
+    return ensureTreeManagerAccess(request, treeId);
+  }
+
   const user = await getAuthUserFromRequest(request);
 
   if (!user) {
@@ -164,23 +266,7 @@ export async function requireTreePermission(
     return { user };
   }
 
-  // 2. Kiểm tra nếu chỉ cần quyền xem (VIEWER)
-  if (minRole === "VIEWER") {
-    return { user };
-  }
-
-  // 3. Kiểm tra quyền TREE_MANAGER trên cây được giao
-  const hasTreeRole =
-    user.assignedTrees.includes("*") || user.assignedTrees.includes(treeId);
-
-  if (!hasTreeRole) {
-    return NextResponse.json(
-      {
-        error: `Từ chối truy cập: Bạn không có quyền TREE_MANAGER trên cây gia phả này (ID: ${treeId}).`,
-      },
-      { status: 403 }
-    );
-  }
-
+  // 2. VIEWER
   return { user };
 }
+

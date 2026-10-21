@@ -4,8 +4,10 @@ export interface Member {
   nickname?: string; // Biệt danh, tên thường gọi (e.g. Cụ Tổ, Bác Ba)
   gender: 'male' | 'female' | 'other';
   generation: number; // 1, 2, 3, 4, 5...
-  birthDate?: string; // dd/mm/yyyy hoặc chuỗi tự do/âm lịch
-  deathDate?: string; // dd/mm/yyyy hoặc chuỗi tự do/âm lịch
+  birthDate?: string; // dd/mm/yyyy hoặc chuỗi tự do
+  birthLunar?: string; // Ngày sinh âm lịch
+  deathDate?: string; // dd/mm/yyyy hoặc chuỗi tự do
+  deathLunar?: string; // Ngày sinh/mất âm lịch
   isAlive: boolean;
   avatarUrl?: string;
   spouseId?: string; // ID người phối ngẫu (Vợ/Chồng)
@@ -14,6 +16,9 @@ export interface Member {
   orderInFamily?: number; // Thứ tự con trong nhà (1, 2, 3... 9)
   phone?: string; // Hiển thị công khai cho mọi role xem
   address?: string; // Hiển thị công khai cho mọi role xem
+  burialPlace?: string; // Mộ phần / nơi an táng
+  titles?: string; // Chức tước, học vị, công danh
+  bio?: string; // Tiểu sử tóm tắt
   notes?: string;
   treeId?: string;
 }
@@ -138,3 +143,42 @@ export interface AdminUser {
   assignedTrees?: string[];
   assignedTreeIds?: string[];
 }
+
+export interface TreeAnniversary {
+  id: string;
+  treeId: string;
+  memberId?: string;
+  title: string;
+  lunarDay: number;
+  lunarMonth: number;
+  isLeapMonth?: boolean;
+  solarDate?: string;
+  location?: string;
+  notes?: string;
+  createdAt?: string;
+}
+
+export interface TreeEvent {
+  id: string;
+  treeId: string;
+  title: string;
+  category: 'NEWS' | 'CEREMONY' | 'MEETING' | 'FEAST';
+  content: string;
+  eventDate?: string;
+  location?: string;
+  isPublic?: boolean;
+  createdAt?: string;
+}
+
+export interface TreeFund {
+  id: string;
+  treeId: string;
+  type: 'INCOME' | 'EXPENSE';
+  amount: number;
+  title: string;
+  contributorOrRecipient: string;
+  date: string;
+  notes?: string;
+  createdAt?: string;
+}
+
